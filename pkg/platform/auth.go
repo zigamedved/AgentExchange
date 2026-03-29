@@ -24,10 +24,10 @@ func NewAuthStore() *AuthStore {
 	a := &AuthStore{orgs: make(map[string]*Org)}
 
 	// Demo organizations — hard-coded for local development
-	a.seed("org-a", "Company A (Researcher)", "faxp_companya_demo")
-	a.seed("org-b", "Company B (Writer)", "faxp_companyb_demo")
-	a.seed("org-c", "Company C (Analyst)", "faxp_companyc_demo")
-	a.seed("org-admin", "Platform Admin", "faxp_admin_demo")
+	a.seed("org-a", "Company A (Researcher)", "ax_companya_demo")
+	a.seed("org-b", "Company B (Writer)", "ax_companyb_demo")
+	a.seed("org-c", "Company C (Analyst)", "ax_companyc_demo")
+	a.seed("org-admin", "Platform Admin", "ax_admin_demo")
 
 	return a
 }

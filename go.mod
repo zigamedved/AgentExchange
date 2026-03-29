@@ -1,4 +1,4 @@
-module github.com/zigamedved/faxp
+module github.com/zigamedved/agent-exchange
 
 go 1.24
 

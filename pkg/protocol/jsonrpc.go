@@ -29,19 +29,19 @@ type RPCError struct {
 
 // Standard JSON-RPC + A2A error codes.
 const (
-	CodeParseError            = -32700
-	CodeInvalidRequest        = -32600
-	CodeMethodNotFound        = -32601
-	CodeInvalidParams         = -32602
-	CodeInternalError         = -32603
-	CodeTaskNotFound          = -32001
+	CodeParseError              = -32700
+	CodeInvalidRequest          = -32600
+	CodeMethodNotFound          = -32601
+	CodeInvalidParams           = -32602
+	CodeInternalError           = -32603
+	CodeTaskNotFound            = -32001
 	CodeContentTypeNotSupported = -32002
-	CodeUnsupportedOperation  = -32003
-	// FAXP-specific
-	CodeAuthRequired           = -32010
-	CodeForbidden              = -32011
-	CodeQuoteExpired           = -32020
-	CodeQuoteNotFound          = -32021
+	CodeUnsupportedOperation    = -32003
+	// AX-specific
+	CodeAuthRequired            = -32010
+	CodeForbidden               = -32011
+	CodeQuoteExpired            = -32020
+	CodeQuoteNotFound           = -32021
 	CodePriceConstraintViolated = -32022
 )
 

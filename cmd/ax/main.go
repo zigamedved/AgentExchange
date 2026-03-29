@@ -5,20 +5,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/urfave/cli/v2"
-	"github.com/zigamedved/faxp/pkg/identity"
-	"github.com/zigamedved/faxp/pkg/platform"
-	"github.com/zigamedved/faxp/pkg/protocol"
-	faxphttp "github.com/zigamedved/faxp/pkg/transport/http"
+	"github.com/zigamedved/agent-exchange/pkg/identity"
+	"github.com/zigamedved/agent-exchange/pkg/platform"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
+	axhttp "github.com/zigamedved/agent-exchange/pkg/transport/http"
 )
 
 func main() {
 	app := &cli.App{
-		Name:  "fixctl",
-		Usage: "FAXP command-line tool",
+		Name:  "ax",
+		Usage: "AgentExchange command-line tool",
 		Commands: []*cli.Command{
+			{
+				Name:  "serve",
+				Usage: "Start the AgentExchange platform server",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "addr", Value: ":8080", EnvVars: []string{"AX_PLATFORM_ADDR"}, Usage: "Listen address"},
+				},
+				Action: func(c *cli.Context) error {
+					addr := c.String("addr")
+					p := platform.New()
+
+					fmt.Printf("\n  AX  AgentExchange\n")
+					fmt.Printf("  Dashboard  >  http://localhost%s\n", addr)
+					fmt.Printf("  Registry   >  http://localhost%s/platform/v1/agents\n", addr)
+					fmt.Printf("\n  Demo API keys:\n")
+					fmt.Printf("    Company A  >  ax_companya_demo\n")
+					fmt.Printf("    Company B  >  ax_companyb_demo\n")
+					fmt.Printf("    Company C  >  ax_companyc_demo\n\n")
+
+					srv := &http.Server{Addr: addr, Handler: p.Handler()}
+					slog.Info("platform starting", "addr", addr)
+					return srv.ListenAndServe()
+				},
+			},
 			{
 				Name:  "keys",
 				Usage: "Manage Ed25519 identity keys",
@@ -27,7 +51,7 @@ func main() {
 						Name:  "generate",
 						Usage: "Generate a new Ed25519 key pair",
 						Flags: []cli.Flag{
-							&cli.StringFlag{Name: "out", Value: "faxp.key", Usage: "Output file path"},
+							&cli.StringFlag{Name: "out", Value: "ax.key", Usage: "Output file path"},
 						},
 						Action: func(c *cli.Context) error {
 							id, err := identity.New()
@@ -46,7 +70,7 @@ func main() {
 						Name:  "show",
 						Usage: "Print the public key from a key file",
 						Flags: []cli.Flag{
-							&cli.StringFlag{Name: "key", Value: "faxp.key", Usage: "Key file path"},
+							&cli.StringFlag{Name: "key", Value: "ax.key", Usage: "Key file path"},
 						},
 						Action: func(c *cli.Context) error {
 							id, err := identity.LoadFromFile(c.String("key"))
@@ -60,74 +84,43 @@ func main() {
 				},
 			},
 			{
-				Name:  "registry",
-				Usage: "Manage agents in the FAXP registry",
+				Name:  "discover",
+				Usage: "Discover agents in the registry",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "platform", Value: "http://localhost:8080", Usage: "Platform URL"},
-					&cli.StringFlag{Name: "api-key", EnvVars: []string{"FAXP_API_KEY"}, Usage: "Platform API key"},
+					&cli.StringFlag{Name: "api-key", EnvVars: []string{"AX_API_KEY"}, Usage: "Platform API key"},
+					&cli.StringFlag{Name: "skill", Usage: "Filter by skill ID or tag"},
 				},
-				Subcommands: []*cli.Command{
-					{
-						Name:  "ls",
-						Usage: "List registered agents",
-						Action: func(c *cli.Context) error {
-							client := platform.NewPlatformClient(c.String("platform"), c.String("api-key"))
-							agents, err := client.FindAgents(context.Background(), "")
-							if err != nil {
-								return err
-							}
-							if len(agents) == 0 {
-								fmt.Println("No agents registered.")
-								return nil
-							}
-							fmt.Printf("%-36s  %-24s  %-16s  %s\n", "ID", "Name", "Org", "Endpoint")
-							fmt.Printf("%s\n", "────────────────────────────────────────────────────────────────────────────────────")
-							for _, a := range agents {
-								fmt.Printf("%-36s  %-24s  %-16s  %s\n",
-									a.ID, a.Name, a.Organization, a.EndpointURL)
-							}
-							return nil
-						},
-					},
-					{
-						Name:  "find",
-						Usage: "Find agents by skill",
-						Flags: []cli.Flag{
-							&cli.StringFlag{Name: "skill", Required: true, Usage: "Skill ID or tag to search for"},
-						},
-						Action: func(c *cli.Context) error {
-							client := platform.NewPlatformClient(c.String("platform"), c.String("api-key"))
-							agents, err := client.FindAgents(context.Background(), c.String("skill"))
-							if err != nil {
-								return err
-							}
-							if len(agents) == 0 {
-								fmt.Printf("No agents found with skill: %s\n", c.String("skill"))
-								return nil
-							}
-							for _, a := range agents {
-								pricing := ""
-								if p := a.AgentCard.FaxpPricing; p != nil {
-									pricing = fmt.Sprintf("  $%.4f/call", p.PerCallUSD)
-								}
-								fmt.Printf("  %s  (%s)%s\n", a.Name, a.ID[:8], pricing)
-							}
-							return nil
-						},
-					},
+				Action: func(c *cli.Context) error {
+					client := platform.NewPlatformClient(c.String("platform"), c.String("api-key"))
+					agents, err := client.FindAgents(context.Background(), c.String("skill"))
+					if err != nil {
+						return err
+					}
+					if len(agents) == 0 {
+						fmt.Println("No agents found.")
+						return nil
+					}
+					fmt.Printf("%-36s  %-24s  %-16s  %s\n", "ID", "Name", "Org", "Endpoint")
+					fmt.Println("─────────────────────────────────────────────────────────────────────────────────────")
+					for _, a := range agents {
+						fmt.Printf("%-36s  %-24s  %-16s  %s\n",
+							a.ID, a.Name, a.Organization, a.EndpointURL)
+					}
+					return nil
 				},
 			},
 			{
-				Name:  "send",
+				Name:  "call",
 				Usage: "Send a message to an agent",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "to", Required: true, Usage: "Agent endpoint URL or platform route URL"},
 					&cli.StringFlag{Name: "text", Usage: "Text message content"},
-					&cli.StringFlag{Name: "api-key", EnvVars: []string{"FAXP_API_KEY"}, Usage: "API key"},
-					&cli.BoolFlag{Name: "stream", Usage: "Use streaming (message/stream)"},
+					&cli.StringFlag{Name: "api-key", EnvVars: []string{"AX_API_KEY"}, Usage: "API key"},
+					&cli.BoolFlag{Name: "stream", Usage: "Use streaming (a2a_sendStreamingMessage)"},
 				},
 				Action: func(c *cli.Context) error {
-					client := faxphttp.NewClient(c.String("to"), c.String("api-key"))
+					client := axhttp.NewClient(c.String("to"), c.String("api-key"))
 					text := c.String("text")
 					if text == "" && c.Args().Len() > 0 {
 						text = c.Args().First()
@@ -186,7 +179,7 @@ func main() {
 					&cli.StringFlag{Name: "url", Required: true, Usage: "Agent base URL"},
 				},
 				Action: func(c *cli.Context) error {
-					client := faxphttp.NewClient(c.String("url"), "")
+					client := axhttp.NewClient(c.String("url"), "")
 					card, err := client.GetCard(context.Background())
 					if err != nil {
 						return err
@@ -200,7 +193,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		slog.Error("fixctl error", "err", err)
+		slog.Error("ax error", "err", err)
 		os.Exit(1)
 	}
 }

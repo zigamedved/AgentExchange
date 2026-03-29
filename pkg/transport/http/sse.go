@@ -1,4 +1,4 @@
-package faxphttp
+package axhttp
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zigamedved/faxp/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
 )
 
 // SSEWriter writes Server-Sent Events to an HTTP response stream.

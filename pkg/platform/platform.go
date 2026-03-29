@@ -1,4 +1,4 @@
-// Package platform implements the FAXP platform server — the registry,
+// Package platform implements the AgentExchange platform server — the registry,
 // auth, routing proxy, metering, and real-time dashboard backend.
 package platform
 
@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zigamedved/faxp/pkg/protocol"
-	"github.com/zigamedved/faxp/pkg/registry"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/registry"
 )
 
-// Platform is the central server that orchestrates the FAXP agent network.
+// Platform is the central server that orchestrates the AgentExchange agent network.
 type Platform struct {
-	registry   *registry.Registry
+	registry   registry.Store
 	auth       *AuthStore
 	meter      *Meter
 	dashboard  *Dashboard
@@ -29,10 +29,15 @@ type Platform struct {
 	logger     *slog.Logger
 }
 
-// New creates a new Platform.
+// New creates a new Platform with the default in-memory registry store.
 func New() *Platform {
+	return NewWithStore(registry.NewMemoryStore())
+}
+
+// NewWithStore creates a new Platform using the provided registry store.
+func NewWithStore(store registry.Store) *Platform {
 	p := &Platform{
-		registry: registry.New(),
+		registry: store,
 		auth:     NewAuthStore(),
 		meter:    NewMeter(),
 		logger:   slog.Default(),
@@ -94,10 +99,10 @@ func (p *Platform) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Kind:      "agent.registered",
 		Timestamp: time.Now(),
 		Data: map[string]any{
-			"agent_id":   id,
-			"name":       req.Name,
-			"org":        org.Name,
-			"skills":     req.AgentCard.Skills,
+			"agent_id": id,
+			"name":     req.Name,
+			"org":      org.Name,
+			"skills":   req.AgentCard.Skills,
 		},
 	})
 
@@ -232,8 +237,8 @@ func (p *Platform) handleRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
-	proxyReq.Header.Set("FAXP-Version", "0.1")
-	proxyReq.Header.Set("FAXP-Caller-Org", org.ID)
+	proxyReq.Header.Set("AX-Version", "0.1")
+	proxyReq.Header.Set("AX-Caller-Org", org.ID)
 
 	resp, err := p.httpClient.Do(proxyReq)
 	if err != nil {
@@ -250,7 +255,7 @@ func (p *Platform) handleRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	priceUSD := callPrice(entry.AgentCard.FaxpPricing)
+	priceUSD := callPrice(entry.AgentCard.AXPricing)
 	p.finishCall(callID, true, "", priceUSD)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -285,7 +290,7 @@ func (p *Platform) handleRouteStream(w http.ResponseWriter, r *http.Request) {
 		AgentID:     entry.ID,
 		AgentName:   entry.Name,
 		AgentOrg:    entry.Organization,
-		Method:      "message/stream",
+		Method:      protocol.MethodSendStreamingMessage,
 	}
 	p.meter.Start(rec)
 	p.dashboard.Broadcast(Event{
@@ -294,10 +299,10 @@ func (p *Platform) handleRouteStream(w http.ResponseWriter, r *http.Request) {
 		Data:      callEventData(rec),
 	})
 
-	// Rewrite method to message/stream
+	// Rewrite method to a2a_sendStreamingMessage
 	var rpcMsg map[string]any
 	if err := json.Unmarshal(body, &rpcMsg); err == nil {
-		rpcMsg["method"] = "message/stream"
+		rpcMsg["method"] = protocol.MethodSendStreamingMessage
 		body, _ = json.Marshal(rpcMsg)
 	}
 
@@ -310,8 +315,8 @@ func (p *Platform) handleRouteStream(w http.ResponseWriter, r *http.Request) {
 	}
 	proxyReq.Header.Set("Content-Type", "application/json")
 	proxyReq.Header.Set("Accept", "text/event-stream")
-	proxyReq.Header.Set("FAXP-Version", "0.1")
-	proxyReq.Header.Set("FAXP-Caller-Org", org.ID)
+	proxyReq.Header.Set("AX-Version", "0.1")
+	proxyReq.Header.Set("AX-Caller-Org", org.ID)
 
 	resp, err := p.httpClient.Do(proxyReq)
 	if err != nil {
@@ -330,7 +335,7 @@ func (p *Platform) handleRouteStream(w http.ResponseWriter, r *http.Request) {
 
 	_, _ = io.Copy(&flushWriter{w: w, flusher: flusher}, resp.Body)
 
-	priceUSD := callPrice(entry.AgentCard.FaxpPricing)
+	priceUSD := callPrice(entry.AgentCard.AXPricing)
 	p.finishCall(callID, true, "", priceUSD)
 }
 

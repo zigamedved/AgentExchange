@@ -14,17 +14,17 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/zigamedved/faxp/pkg/platform"
-	"github.com/zigamedved/faxp/pkg/protocol"
-	"github.com/zigamedved/faxp/pkg/registry"
-	faxphttp "github.com/zigamedved/faxp/pkg/transport/http"
+	"github.com/zigamedved/agent-exchange/pkg/platform"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/registry"
+	axhttp "github.com/zigamedved/agent-exchange/pkg/transport/http"
 )
 
 func main() {
-	platformURL := envOr("FAXP_PLATFORM_URL", "http://localhost:8080")
-	apiKey := envOr("FAXP_API_KEY", "faxp_companyc_demo")
-	agentURL := envOr("FAXP_AGENT_URL", "http://localhost:8083")
-	port := envOr("FAXP_AGENT_PORT", "8083")
+	platformURL := envOr("AX_PLATFORM_URL", "http://localhost:8080")
+	apiKey := envOr("AX_API_KEY", "ax_companyc_demo")
+	agentURL := envOr("AX_AGENT_URL", "http://localhost:8083")
+	port := envOr("AX_AGENT_PORT", "8083")
 
 	agent := &AnalystAgent{
 		card: &protocol.AgentCard{
@@ -46,7 +46,7 @@ func main() {
 				Streaming: false,
 			},
 			Authentication: &protocol.AuthSchemes{Schemes: []string{"Bearer"}},
-			FaxpPricing: &protocol.Pricing{
+			AXPricing: &protocol.Pricing{
 				Model:      "per-call",
 				PerCallUSD: 0.002,
 			},
@@ -69,7 +69,7 @@ func main() {
 		go heartbeat(client, agentID)
 	}
 
-	srv := faxphttp.NewServer(agent)
+	srv := axhttp.NewServer(agent)
 	slog.Info("company-c-analyst agent started", "addr", ":"+port, "endpoint", agentURL)
 	if err := http.ListenAndServe(":"+port, srv); err != nil {
 		slog.Error("server error", "err", err)
@@ -98,8 +98,8 @@ func (a *AnalystAgent) HandleMessage(_ context.Context, params *protocol.SendMes
 		Status: protocol.TaskStatus{State: protocol.TaskStateCompleted},
 		Artifacts: []protocol.Artifact{
 			{
-				Name:  "analysis.json",
-				Parts: []protocol.Part{{Kind: "data", Data: raw}},
+				Name:      "analysis.json",
+				Parts:     []protocol.Part{{Kind: "data", Data: raw}},
 				LastChunk: &trueBool,
 			},
 		},
@@ -187,7 +187,6 @@ func analyzeSentiment(text string) (string, float64) {
 }
 
 func extractTopics(text string) []string {
-	// Extract capitalized multi-word phrases and significant terms
 	words := strings.Fields(text)
 	freq := make(map[string]int)
 
@@ -200,7 +199,6 @@ func extractTopics(text string) []string {
 			continue
 		}
 		lower := strings.ToLower(w)
-		// Skip common stop words
 		stop := map[string]bool{
 			"this": true, "that": true, "with": true, "from": true,
 			"have": true, "will": true, "been": true, "their": true,
@@ -212,7 +210,6 @@ func extractTopics(text string) []string {
 		freq[lower]++
 	}
 
-	// Return top 5 by frequency
 	type kv struct {
 		k string
 		v int

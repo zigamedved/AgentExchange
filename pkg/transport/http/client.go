@@ -1,4 +1,4 @@
-package faxphttp
+package axhttp
 
 import (
 	"bufio"
@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zigamedved/faxp/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
 )
 
-// Client sends FAXP / A2A-compatible JSON-RPC messages to an agent endpoint.
+// Client sends A2A-compatible JSON-RPC messages to an agent endpoint.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -33,9 +33,9 @@ func NewClient(baseURL, apiKey string) *Client {
 	}
 }
 
-// GetCard fetches the agent's Agent Card from /.well-known/agent.json.
+// GetCard fetches the agent's Agent Card from /.well-known/a2a/agent-card.json.
 func (c *Client) GetCard(ctx context.Context) (*protocol.AgentCard, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/.well-known/agent.json", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/.well-known/a2a/agent-card.json", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -58,14 +58,14 @@ func (c *Client) GetCard(ctx context.Context) (*protocol.AgentCard, error) {
 	return &card, nil
 }
 
-// SendMessage calls message/send and returns the Task or Message.
+// SendMessage calls a2a_sendMessage and returns the Task or Message.
 // Returns (task, nil, nil) or (nil, message, nil) depending on the agent's response.
 func (c *Client) SendMessage(ctx context.Context, params *protocol.SendMessageParams) (*protocol.Task, *protocol.Message, error) {
 	if params.Message.MessageID == "" {
 		params.Message.MessageID = uuid.New().String()
 	}
 
-	req, err := protocol.NewRequest(uuid.New().String(), "message/send", params)
+	req, err := protocol.NewRequest(uuid.New().String(), protocol.MethodSendMessage, params)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,14 +92,14 @@ func (c *Client) SendMessage(ctx context.Context, params *protocol.SendMessagePa
 	return nil, nil, fmt.Errorf("unexpected response shape")
 }
 
-// StreamMessage calls message/stream and delivers SSE events to the handler.
+// StreamMessage calls a2a_sendStreamingMessage and delivers SSE events to the handler.
 // The handler is called once per event until the stream ends or ctx is cancelled.
 func (c *Client) StreamMessage(ctx context.Context, params *protocol.SendMessageParams, handler func(event map[string]any) error) error {
 	if params.Message.MessageID == "" {
 		params.Message.MessageID = uuid.New().String()
 	}
 
-	req, err := protocol.NewRequest(uuid.New().String(), "message/stream", params)
+	req, err := protocol.NewRequest(uuid.New().String(), protocol.MethodSendStreamingMessage, params)
 	if err != nil {
 		return err
 	}
@@ -152,9 +152,9 @@ func (c *Client) StreamMessage(ctx context.Context, params *protocol.SendMessage
 	return scanner.Err()
 }
 
-// RequestQuote calls quote/request to get a price and SLA commitment.
+// RequestQuote calls ax_quoteRequest to get a price and SLA commitment.
 func (c *Client) RequestQuote(ctx context.Context, params *protocol.QuoteRequestParams) (*protocol.QuoteResponse, error) {
-	req, err := protocol.NewRequest(uuid.New().String(), "quote/request", params)
+	req, err := protocol.NewRequest(uuid.New().String(), protocol.MethodQuoteRequest, params)
 	if err != nil {
 		return nil, err
 	}

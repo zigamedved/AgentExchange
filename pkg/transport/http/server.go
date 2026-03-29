@@ -1,7 +1,7 @@
-// Package faxphttp provides the HTTP transport layer for FAXP agents.
+// Package axhttp provides the HTTP transport layer for AgentExchange agents.
 // It implements the A2A-compatible HTTP/JSON-RPC binding and extends it
-// with FAXP quote methods and SSE streaming.
-package faxphttp
+// with AX quote methods and SSE streaming.
+package axhttp
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/zigamedved/faxp/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
 )
 
-// Agent is the interface that FAXP agent implementations must satisfy.
+// Agent is the interface that AgentExchange agent implementations must satisfy.
 type Agent interface {
 	// Card returns the agent's capability declaration.
 	Card() *protocol.AgentCard
@@ -30,7 +30,7 @@ type StreamingAgent interface {
 	HandleMessageStream(ctx context.Context, params *protocol.SendMessageParams, w *SSEWriter) error
 }
 
-// QuoteAgent extends Agent with FAXP quote negotiation support.
+// QuoteAgent extends Agent with AX quote negotiation support.
 type QuoteAgent interface {
 	Agent
 	HandleQuoteRequest(ctx context.Context, params *protocol.QuoteRequestParams) (*protocol.QuoteResponse, error)
@@ -55,7 +55,7 @@ func NewServer(agent Agent) *Server {
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
-	case "/.well-known/agent.json":
+	case "/.well-known/a2a/agent-card.json":
 		s.handleAgentCard(w, r)
 	case "/health":
 		w.WriteHeader(http.StatusOK)
@@ -95,17 +95,17 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("rpc", "method", req.Method)
 
 	switch req.Method {
-	case "message/send":
+	case protocol.MethodSendMessage:
 		s.handleMessageSend(w, r, &req)
-	case "message/stream":
+	case protocol.MethodSendStreamingMessage:
 		s.handleMessageStream(w, r, &req)
-	case "tasks/get":
+	case protocol.MethodGetTask:
 		s.handleTasksGet(w, r, &req)
-	case "tasks/cancel":
+	case protocol.MethodCancelTask:
 		s.writeError(w, req.ID, protocol.CodeUnsupportedOperation, "task cancellation not supported", nil)
-	case "quote/request":
+	case protocol.MethodQuoteRequest:
 		s.handleQuoteRequest(w, r, &req)
-	case "quote/accept":
+	case protocol.MethodQuoteAccept:
 		s.handleQuoteAccept(w, r, &req)
 	default:
 		s.writeError(w, req.ID, protocol.CodeMethodNotFound, "method not found: "+req.Method, nil)
