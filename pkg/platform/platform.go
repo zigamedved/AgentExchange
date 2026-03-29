@@ -208,7 +208,9 @@ func (p *Platform) handleRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract method for metering
-	var rpcReq struct{ Method string `json:"method"` }
+	var rpcReq struct {
+		Method string `json:"method"`
+	}
 	_ = json.Unmarshal(body, &rpcReq)
 
 	callID := uuid.New().String()

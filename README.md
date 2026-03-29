@@ -200,9 +200,3 @@ type Store interface {
 ```
 
 The default `MemoryStore` runs in-memory with TTL-based expiration. For production, implement the interface with PostgreSQL, SQLite, or any persistent backend and pass it to `platform.NewWithStore(store)`.
-
----
-
-## License
-
-MIT

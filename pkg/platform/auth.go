@@ -29,6 +29,9 @@ func NewAuthStore() *AuthStore {
 	a.seed("org-c", "Company C (Analyst)", "ax_companyc_demo")
 	a.seed("org-admin", "Platform Admin", "ax_admin_demo")
 
+	// cli client seed
+	a.seed("cli-client", "CLI Client", "api-key")
+
 	return a
 }
 
