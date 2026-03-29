@@ -66,6 +66,7 @@ func main() {
 		slog.Warn("could not register with platform", "err", err)
 	} else {
 		slog.Info("registered with platform", "agent_id", agentID)
+		go heartbeat(client, agentID)
 	}
 
 	srv := faxphttp.NewServer(agent)
@@ -238,6 +239,16 @@ func extractTopics(text string) []string {
 		topics = append(topics, kv.k)
 	}
 	return topics
+}
+
+func heartbeat(client *platform.PlatformClient, agentID string) {
+	ticker := time.NewTicker(120 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		if err := client.Heartbeat(context.Background(), agentID); err != nil {
+			slog.Warn("heartbeat failed", "err", err)
+		}
+	}
 }
 
 func envOr(key, fallback string) string {

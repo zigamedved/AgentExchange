@@ -60,6 +60,8 @@ You'll see Company A's researcher:
 
 All calls appear in the live dashboard with latency, cost, and organization attribution.
 
+![Dashboard view after demo](/examples/FAXP-demo.png)
+
 ---
 
 ## SDK Usage

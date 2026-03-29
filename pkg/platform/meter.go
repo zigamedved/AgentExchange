@@ -26,7 +26,7 @@ type CallRecord struct {
 type Meter struct {
 	mu      sync.RWMutex
 	records []*CallRecord
-	spend   map[string]float64 // key: org ID
+	spend   map[string]float64 // key: org name (matches CallerOrg on CallRecord)
 }
 
 // NewMeter returns an empty Meter.
@@ -61,7 +61,7 @@ func (m *Meter) Complete(id string, success bool, errMsg string, priceUSD float6
 				r.Status = "error"
 				r.ErrorMsg = errMsg
 			}
-			m.spend[r.CallerOrgID] += priceUSD
+			m.spend[r.CallerOrg] += priceUSD
 			return r
 		}
 	}

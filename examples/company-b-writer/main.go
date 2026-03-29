@@ -172,14 +172,13 @@ compounding efficiency advantages. Key investments should focus on:
 }
 
 func heartbeat(client *platform.PlatformClient, agentID string) {
-	ticker := time.NewTicker(60 * time.Second)
+	// Refresh every TTL/2 to give a comfortable safety margin before expiry.
+	ticker := time.NewTicker(120 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		_, _ = client.RegisterAgent(context.Background(), registry.RegisterRequest{
-			Name:       "company-b-writer",
-			TTLSeconds: 300,
-		})
-		_ = agentID
+		if err := client.Heartbeat(context.Background(), agentID); err != nil {
+			slog.Warn("heartbeat failed", "err", err)
+		}
 	}
 }
 

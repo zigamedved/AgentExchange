@@ -595,6 +595,29 @@ func (c *PlatformClient) FindAgents(ctx context.Context, skill string) ([]*regis
 	return result.Agents, nil
 }
 
+// Heartbeat refreshes an agent's TTL so it is not reaped by the registry.
+// Call this periodically (e.g. every TTL/2 seconds) from a background goroutine.
+func (c *PlatformClient) Heartbeat(ctx context.Context, agentID string) error {
+	url := fmt.Sprintf("%s/platform/v1/agents/%s/heartbeat", c.baseURL, agentID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("heartbeat: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("heartbeat failed (status %d): %s", resp.StatusCode, body)
+	}
+	return nil
+}
+
 // RouteURL returns the platform routing URL for a given agent ID.
 func (c *PlatformClient) RouteURL(agentID string) string {
 	return fmt.Sprintf("%s/platform/v1/route/%s", c.baseURL, agentID)
