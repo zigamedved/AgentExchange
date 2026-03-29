@@ -5,7 +5,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FAXP Platform — Live Dashboard</title>
+<title>AgentExchange — Live Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d1117; color: #c9d1d9; font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; }
@@ -47,7 +47,7 @@ const dashboardHTML = `<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>⬡ FAXP Platform</h1>
+  <h1>AX AgentExchange</h1>
   <div id="conn-badge" class="badge offline">connecting</div>
   <div class="status-bar">
     <div>Agents: <span id="agent-count">0</span></div>
@@ -71,7 +71,7 @@ const dashboardHTML = `<!DOCTYPE html>
   </div>
 </div>
 <script>
-const API_KEY = 'faxp_admin_demo';
+const API_KEY = 'ax_admin_demo';
 let callCount = 0;
 let totalSpend = 0;
 const agents = {};
@@ -89,7 +89,7 @@ function renderAgents() {
     const skills = (a.agent_card?.skills || []).map(s =>
       '<span class="skill-tag">' + s.id + '</span>'
     ).join('');
-    const price = a.agent_card?.['x-faxp-pricing'];
+    const price = a.agent_card?.['x-ax-pricing'];
     const priceStr = price ? '<div class="price">$' + price.per_call_usd.toFixed(4) + ' / call</div>' : '';
     return '<div class="agent-card"><div class="name">' + a.name + '</div>' +
       '<div class="org">' + (a.organization || '') + '</div>' +
@@ -102,13 +102,13 @@ function renderCall(rec) {
   const list = document.getElementById('calls-list');
   if (list.querySelector('.empty')) list.innerHTML = '';
   const dot = '<span class="status-dot ' + rec.status + '"></span>';
-  const latency = rec.latency_ms ? rec.latency_ms + 'ms' : '—';
+  const latency = rec.latency_ms ? rec.latency_ms + 'ms' : '';
   const row = document.createElement('div');
   row.className = 'call-row';
   row.id = 'call-' + rec.id;
   row.innerHTML =
     '<div class="time">' + fmtTime(rec.started_at) + '</div>' +
-    '<div class="route"><span>' + (rec.caller_org || '') + '</span> → ' + (rec.agent_name || '') + '</div>' +
+    '<div class="route"><span>' + (rec.caller_org || '') + '</span> > ' + (rec.agent_name || '') + '</div>' +
     '<div class="method">' + (rec.method || '') + '</div>' +
     '<div class="latency">' + latency + '</div>' +
     '<div class="status">' + dot + '</div>';
@@ -122,7 +122,7 @@ function updateCall(rec) {
   if (!row) { renderCall(rec); return; }
   const dot = row.querySelector('.status-dot');
   if (dot) { dot.className = 'status-dot ' + rec.status; }
-  row.querySelector('.latency').textContent = rec.latency_ms ? rec.latency_ms + 'ms' : '—';
+  row.querySelector('.latency').textContent = rec.latency_ms ? rec.latency_ms + 'ms' : '';
 }
 
 function renderSpend() {

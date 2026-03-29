@@ -1,24 +1,24 @@
-# FAXP — Fixed Agent eXchange Protocol
+# AgentExchange (AX) — Protocol Extensions
 
-**Version:** 0.1.0  
-**Status:** Draft  
-**Compatibility:** Superset of Google A2A Protocol v1.0.0
+**Version:** 0.1.0
+**Status:** Draft
+**Compatibility:** A2A Protocol v1.0.0 native
 
 ---
 
 ## 1. Overview
 
-FAXP is an open protocol for cross-organization AI agent communication. It extends the A2A Protocol with economic primitives (pricing, SLA negotiation), cryptographic message signing, and a platform routing model — the missing layer between a protocol spec and a production-ready agent network.
+AgentExchange is an A2A-native platform for cross-organization AI agent communication. It extends the A2A Protocol with economic primitives (pricing, SLA negotiation), cryptographic message signing, and a platform routing model.
 
 **What A2A provides:** Message format, task lifecycle, capability discovery (Agent Cards), streaming via SSE.
 
-**What FAXP adds:**
-- Pricing hints in Agent Cards (`x-faxp-pricing`)
-- Ed25519 message signatures (`x-faxp-sig` in message metadata)
-- Quote negotiation (`quote/request`, `quote/accept` JSON-RPC methods)
+**What AX adds:**
+- Pricing hints in Agent Cards (`x-ax-pricing`)
+- Ed25519 message signatures (`x-ax-sig` in message metadata)
+- Quote negotiation (`ax_quoteRequest`, `ax_quoteAccept` JSON-RPC methods)
 - Platform routing API (registry, auth, metering, observability)
 
-FAXP is a strict superset of A2A: any A2A-compatible agent is a valid FAXP agent. FAXP agents expose extra capabilities that A2A clients ignore gracefully.
+AX is fully A2A-native: any A2A-compatible agent works with the exchange. AX extensions are additive and gracefully ignored by standard A2A clients.
 
 ---
 
@@ -26,9 +26,9 @@ FAXP is a strict superset of A2A: any A2A-compatible agent is a valid FAXP agent
 
 ```
 ┌─────────────────────────────────────────────┐
-│         FAXP Platform Layer                 │  registry, auth, billing, observability
+│         AX Platform Layer                   │  registry, auth, billing, observability
 ├─────────────────────────────────────────────┤
-│         FAXP Message Protocol               │  A2A superset + pricing + signing + quotes
+│         A2A Message Protocol + AX ext.      │  pricing + signing + quotes
 ├─────────────────────────────────────────────┤
 │    HTTP/1.1 · HTTP/2 · SSE · WebSocket      │
 ├─────────────────────────────────────────────┤
@@ -36,15 +36,15 @@ FAXP is a strict superset of A2A: any A2A-compatible agent is a valid FAXP agent
 └─────────────────────────────────────────────┘
 ```
 
-MCP (Model Context Protocol) is orthogonal — it handles LLM↔tool calls inside an agent. FAXP handles agent↔agent calls between agents (and between organizations).
+MCP (Model Context Protocol) is orthogonal. It handles LLM-to-tool calls inside an agent. A2A handles agent-to-agent calls between agents (and between organizations). AX adds the platform layer on top.
 
 ---
 
 ## 3. Agent Card
 
-Every FAXP agent MUST serve a JSON document at `GET /.well-known/agent.json`.
+Every A2A agent MUST serve a JSON document at `GET /.well-known/a2a/agent-card.json`.
 
-The Agent Card follows the A2A AgentCard schema with FAXP extensions:
+The Agent Card follows the A2A AgentCard schema. AX adds optional extensions:
 
 ```json
 {
@@ -65,20 +65,20 @@ The Agent Card follows the A2A AgentCard schema with FAXP extensions:
   "capabilities": {
     "streaming": true,
     "pushNotifications": false,
-    "x-faxp-quotes": true
+    "x-ax-quotes": true
   },
   "authentication": {
     "schemes": ["Bearer"]
   },
-  "x-faxp-pricing": {
+  "x-ax-pricing": {
     "model": "per-call",
     "per_call_usd": 0.005
   },
-  "x-faxp-pubkey": "<base64-encoded Ed25519 public key>"
+  "x-ax-pubkey": "<base64-encoded Ed25519 public key>"
 }
 ```
 
-### 3.1 Pricing Extension (`x-faxp-pricing`)
+### 3.1 Pricing Extension (`x-ax-pricing`)
 
 | Field | Type | Description |
 |---|---|---|
@@ -86,7 +86,7 @@ The Agent Card follows the A2A AgentCard schema with FAXP extensions:
 | `per_call_usd` | float | Price per call in USD |
 | `per_token_usd` | float | Price per output token in USD |
 
-### 3.2 Public Key Extension (`x-faxp-pubkey`)
+### 3.2 Public Key Extension (`x-ax-pubkey`)
 
 Base64url-encoded Ed25519 public key. Used by callers to verify message signatures from this agent.
 
@@ -94,14 +94,14 @@ Base64url-encoded Ed25519 public key. Used by callers to verify message signatur
 
 ## 4. Message Format
 
-FAXP uses JSON-RPC 2.0 over HTTP, identical to A2A.
+AX uses JSON-RPC 2.0 over HTTP, identical to A2A.
 
 ### 4.1 JSON-RPC Envelope
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "message/send",
+  "method": "a2a_sendMessage",
   "params": { ... },
   "id": "req-uuid"
 }
@@ -120,17 +120,17 @@ FAXP uses JSON-RPC 2.0 over HTTP, identical to A2A.
   "taskId": "task-uuid",
   "contextId": "ctx-uuid",
   "metadata": {
-    "x-faxp-sig": "<base64url Ed25519 signature>",
-    "x-faxp-from": "agent://company-a/researcher",
-    "x-faxp-nonce": "random-nonce",
-    "x-faxp-ts": 1743100000000
+    "x-ax-sig": "<base64url Ed25519 signature>",
+    "x-ax-from": "agent://company-a/researcher",
+    "x-ax-nonce": "random-nonce",
+    "x-ax-ts": 1743100000000
   }
 }
 ```
 
 ### 4.3 Message Signing
 
-When `x-faxp-pubkey` is present in the Agent Card, the sender SHOULD sign outgoing messages.
+When `x-ax-pubkey` is present in the Agent Card, the sender SHOULD sign outgoing messages.
 
 **Signing input** (canonical JSON, keys sorted, no whitespace):
 
@@ -145,7 +145,7 @@ sign( utf8( canonical_json({
 }) ) )
 ```
 
-The resulting Ed25519 signature is base64url-encoded and placed in `metadata["x-faxp-sig"]`.
+The resulting Ed25519 signature is base64url-encoded and placed in `metadata["x-ax-sig"]`.
 
 Receivers SHOULD verify signatures when the sender's public key is available via the registry.
 
@@ -157,14 +157,14 @@ These methods are inherited from A2A and MUST be supported:
 
 | Method | Description |
 |---|---|
-| `message/send` | Send a message; receive Task or direct Message |
-| `message/stream` | Send a message; receive SSE stream of Task/artifact updates |
-| `tasks/get` | Retrieve a Task by ID |
-| `tasks/cancel` | Cancel a running Task |
+| `a2a_sendMessage` | Send a message; receive Task or direct Message |
+| `a2a_sendStreamingMessage` | Send a message; receive SSE stream of Task/artifact updates |
+| `a2a_getTask` | Retrieve a Task by ID |
+| `a2a_cancelTask` | Cancel a running Task |
 
-### 5.1 Streaming (`message/stream`)
+### 5.1 Streaming (`a2a_sendStreamingMessage`)
 
-When a client calls `message/stream`, the server responds with `Content-Type: text/event-stream`.
+When a client calls `a2a_sendStreamingMessage`, the server responds with `Content-Type: text/event-stream`.
 
 Each SSE event is a JSON object of type `TaskStatusUpdateEvent` or `TaskArtifactUpdateEvent`:
 
@@ -176,11 +176,11 @@ data: {"kind":"status","taskId":"t-1","status":{"state":"completed"},"final":tru
 
 ---
 
-## 6. FAXP Extension Methods
+## 6. AX Extension Methods
 
-These methods are only supported by agents that declare `"x-faxp-quotes": true` in their Agent Card capabilities.
+These methods are only supported by agents that declare `"x-ax-quotes": true` in their Agent Card capabilities.
 
-### 6.1 `quote/request`
+### 6.1 `ax_quoteRequest`
 
 Caller requests a price quote and SLA commitment before committing to a task.
 
@@ -188,7 +188,7 @@ Caller requests a price quote and SLA commitment before committing to a task.
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "quote/request",
+  "method": "ax_quoteRequest",
   "params": {
     "skill_id": "report_generation",
     "task_description": "Write a 500-word market report.",
@@ -220,7 +220,7 @@ Caller requests a price quote and SLA commitment before committing to a task.
 }
 ```
 
-### 6.2 `quote/accept`
+### 6.2 `ax_quoteAccept`
 
 Caller accepts a quote and kicks off the task, referencing the quote ID.
 
@@ -228,7 +228,7 @@ Caller accepts a quote and kicks off the task, referencing the quote ID.
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "quote/accept",
+  "method": "ax_quoteAccept",
   "params": {
     "quote_id": "qte-uuid",
     "message": { ... }
@@ -237,13 +237,13 @@ Caller accepts a quote and kicks off the task, referencing the quote ID.
 }
 ```
 
-This behaves identically to `message/send` but binds the execution to the quoted SLA and price.
+This behaves identically to `a2a_sendMessage` but binds the execution to the quoted SLA and price.
 
 ---
 
 ## 7. Platform API
 
-The FAXP Platform is an optional hosted service that provides discovery, routing, metering, and observability for FAXP agents. Agents connect to the platform by registering; callers use the platform to discover and route calls without knowing agent endpoints directly.
+The AX Platform is an optional hosted service that provides discovery, routing, metering, and observability for A2A agents. Agents connect to the platform by registering; callers use the platform to discover and route calls without knowing agent endpoints directly.
 
 Base path: `/platform/v1`
 
@@ -283,7 +283,7 @@ POST /platform/v1/route/{agent_id}
 Authorization: Bearer <api-key>
 Content-Type: application/json
 
-{ "jsonrpc": "2.0", "method": "message/send", "params": { ... }, "id": "1" }
+{ "jsonrpc": "2.0", "method": "a2a_sendMessage", "params": { ... }, "id": "1" }
 ```
 
 The platform:
@@ -314,7 +314,7 @@ Events: `call.started`, `call.completed`, `call.failed`, `agent.registered`, `ag
 
 ## 8. Error Codes
 
-FAXP uses A2A's JSON-RPC error codes plus the following:
+AX uses A2A's JSON-RPC error codes plus the following:
 
 | Code | Name | Description |
 |---|---|---|
@@ -352,6 +352,6 @@ The platform resolves these URIs to HTTP endpoint URLs via the registry. Within 
 
 ## 10. Versioning
 
-FAXP follows semver. Field additions within a major version are non-breaking. Unknown fields MUST be ignored by receivers (forward compatibility). The `"version"` field in Agent Cards declares the agent's implementation version, not the protocol version.
+AX follows semver. Field additions within a major version are non-breaking. Unknown fields MUST be ignored by receivers (forward compatibility). The `"version"` field in Agent Cards declares the agent's implementation version, not the protocol version.
 
-The protocol version is declared in the FAXP-Version HTTP header: `FAXP-Version: 0.1`.
+The protocol version is declared in the AX-Version HTTP header: `AX-Version: 0.1`.

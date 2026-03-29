@@ -18,15 +18,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zigamedved/faxp/pkg/platform"
-	"github.com/zigamedved/faxp/pkg/protocol"
-	"github.com/zigamedved/faxp/pkg/registry"
+	"github.com/zigamedved/agent-exchange/pkg/platform"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/registry"
 )
 
 func main() {
-	platformURL := envOr("FAXP_PLATFORM_URL", "http://localhost:8080")
-	apiKey := envOr("FAXP_API_KEY", "faxp_companya_demo")
-	topic := envOr("FAXP_TOPIC", "AI Agent Protocols and Distributed Systems in 2026")
+	platformURL := envOr("AX_PLATFORM_URL", "http://localhost:8080")
+	apiKey := envOr("AX_API_KEY", "ax_companya_demo")
+	topic := envOr("AX_TOPIC", "AI Agent Protocols and Distributed Systems in 2026")
 
 	// Wait a moment for agents to finish registering
 	time.Sleep(500 * time.Millisecond)
@@ -36,45 +36,45 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("═══════════════════════════════════════════════════════")
-	fmt.Println("  FAXP Demo — Company A Researcher")
+	fmt.Println("  AgentExchange Demo — Company A Researcher")
 	fmt.Println("═══════════════════════════════════════════════════════")
 	fmt.Printf("  Topic: %s\n\n", topic)
 
-	// ── Step 1: Discover the writer agent ──────────────────────────────
+	// ── Step 1: Discover the writer agent
 	fmt.Println("── Step 1: Discovering report_generation agents via platform registry...")
 	writers, err := client.FindAgents(ctx, "report_generation")
 	must(err, "discover writers")
 	if len(writers) == 0 {
-		fmt.Println("  ✗ No writer agents found. Is company-b-writer running?")
+		fmt.Println("  x No writer agents found. Is company-b-writer running?")
 		os.Exit(1)
 	}
 	writer := writers[0]
-	fmt.Printf("  ✓ Found: %s (id: %s)\n\n", writer.Name, writer.ID[:8])
+	fmt.Printf("  Found: %s (id: %s)\n\n", writer.Name, writer.ID[:8])
 
-	// ── Step 2: Discover the analyst agent ────────────────────────────
+	// ── Step 2: Discover the analyst agent
 	fmt.Println("── Step 2: Discovering text_analysis agents via platform registry...")
 	analysts, err := client.FindAgents(ctx, "text_analysis")
 	must(err, "discover analysts")
 	if len(analysts) == 0 {
-		fmt.Println("  ✗ No analyst agents found. Is company-c-analyst running?")
+		fmt.Println("  x No analyst agents found. Is company-c-analyst running?")
 		os.Exit(1)
 	}
 	analyst := analysts[0]
-	fmt.Printf("  ✓ Found: %s (id: %s)\n\n", analyst.Name, analyst.ID[:8])
+	fmt.Printf("  Found: %s (id: %s)\n\n", analyst.Name, analyst.ID[:8])
 
-	// ── Step 3: Request a streamed report from the writer ──────────────
-	fmt.Println("── Step 3: Routing streaming call → company-b-writer (via platform)...")
+	// ── Step 3: Request a streamed report from the writer
+	fmt.Println("── Step 3: Routing streaming call > company-b-writer (via platform)...")
 	fmt.Println()
 	report, err := streamReport(ctx, client, writer, topic, apiKey)
 	must(err, "stream report")
 
-	// ── Step 4: Send report to analyst ────────────────────────────────
+	// ── Step 4: Send report to analyst
 	fmt.Println()
-	fmt.Println("── Step 4: Routing call → company-c-analyst (via platform)...")
+	fmt.Println("── Step 4: Routing call > company-c-analyst (via platform)...")
 	analysis, err := analyzeReport(ctx, client, analyst, report, apiKey)
 	must(err, "analyze report")
 
-	// ── Step 5: Print final results ────────────────────────────────────
+	// ── Step 5: Print final results
 	fmt.Println()
 	fmt.Println("── Step 5: Final Analysis Results")
 	fmt.Println()
@@ -89,7 +89,7 @@ func main() {
 	fmt.Println()
 }
 
-// streamReport routes a message/stream call through the platform proxy
+// streamReport routes a a2a_sendStreamingMessage call through the platform proxy
 // and prints the streaming chunks as they arrive.
 func streamReport(ctx context.Context, client *platform.PlatformClient, agent *registry.Entry, topic, apiKey string) (string, error) {
 	params := protocol.SendMessageParams{
@@ -100,7 +100,7 @@ func streamReport(ctx context.Context, client *platform.PlatformClient, agent *r
 		},
 	}
 
-	rpcReq, err := protocol.NewRequest(uuid.New().String(), "message/stream", params)
+	rpcReq, err := protocol.NewRequest(uuid.New().String(), protocol.MethodSendStreamingMessage, params)
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +171,7 @@ func analyzeReport(ctx context.Context, client *platform.PlatformClient, agent *
 		},
 	}
 
-	rpcReq, err := protocol.NewRequest(uuid.New().String(), "message/send", params)
+	rpcReq, err := protocol.NewRequest(uuid.New().String(), protocol.MethodSendMessage, params)
 	if err != nil {
 		return nil, err
 	}

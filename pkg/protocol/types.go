@@ -1,13 +1,13 @@
-// Package protocol defines the FAXP message types — a strict superset of
-// the A2A Protocol v1.0.0. All A2A-compatible fields are preserved; FAXP
-// extensions use the "x-faxp-" prefix and are gracefully ignored by A2A clients.
+// Package protocol defines the AgentExchange message types — a strict superset of
+// the A2A Protocol v1.0.0. All A2A-compatible fields are preserved; AX
+// extensions use the "x-ax-" prefix and are gracefully ignored by A2A clients.
 package protocol
 
 import "encoding/json"
 
 // ─── Agent Card ──────────────────────────────────────────────────────────────
 
-// AgentCard is served at GET /.well-known/agent.json.
+// AgentCard is served at GET /.well-known/a2a/agent-card.json.
 // Compatible with the A2A AgentCard schema.
 type AgentCard struct {
 	Name           string             `json:"name"`
@@ -17,9 +17,9 @@ type AgentCard struct {
 	Skills         []Skill            `json:"skills,omitempty"`
 	Capabilities   AgentCapabilities  `json:"capabilities"`
 	Authentication *AuthSchemes       `json:"authentication,omitempty"`
-	// FAXP extensions — ignored by A2A clients
-	FaxpPricing *Pricing `json:"x-faxp-pricing,omitempty"`
-	FaxpPubKey  string   `json:"x-faxp-pubkey,omitempty"`
+	// AX extensions — ignored by A2A clients
+	AXPricing *Pricing `json:"x-ax-pricing,omitempty"`
+	AXPubKey  string   `json:"x-ax-pubkey,omitempty"`
 }
 
 // Skill describes a specific capability an agent offers.
@@ -36,8 +36,8 @@ type Skill struct {
 type AgentCapabilities struct {
 	Streaming         bool `json:"streaming"`
 	PushNotifications bool `json:"pushNotifications"`
-	// FAXP extension: agent supports quote/request and quote/accept methods
-	FaxpQuotes bool `json:"x-faxp-quotes,omitempty"`
+	// AX extension: agent supports ax_quoteRequest and ax_quoteAccept methods
+	AXQuotes bool `json:"x-ax-quotes,omitempty"`
 }
 
 // AuthSchemes lists the authentication mechanisms the agent accepts.
@@ -45,7 +45,7 @@ type AuthSchemes struct {
 	Schemes []string `json:"schemes"`
 }
 
-// Pricing is the FAXP pricing extension for Agent Cards.
+// Pricing is the AX pricing extension for Agent Cards.
 type Pricing struct {
 	// Model is one of: "per-call", "per-token", "free"
 	Model       string  `json:"model"`
@@ -55,7 +55,7 @@ type Pricing struct {
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
-// Message is an A2A-compatible message with optional FAXP signing metadata.
+// Message is an A2A-compatible message with optional AX signing metadata.
 type Message struct {
 	Role      string   `json:"role"` // "user" | "agent"
 	Parts     []Part   `json:"parts"`
@@ -65,7 +65,7 @@ type Message struct {
 	Metadata  Metadata `json:"metadata,omitempty"`
 }
 
-// Metadata is an open key-value map. FAXP signing fields live here.
+// Metadata is an open key-value map. AX signing fields live here.
 type Metadata map[string]any
 
 // Part is the smallest unit of content in a Message or Artifact.
@@ -137,13 +137,13 @@ type TaskStatus struct {
 type TaskState string
 
 const (
-	TaskStateSubmitted    TaskState = "submitted"
-	TaskStateWorking      TaskState = "working"
-	TaskStateCompleted    TaskState = "completed"
-	TaskStateFailed       TaskState = "failed"
-	TaskStateCanceled     TaskState = "canceled"
-	TaskStateRejected     TaskState = "rejected"
-	TaskStateAuthRequired TaskState = "auth-required"
+	TaskStateSubmitted     TaskState = "submitted"
+	TaskStateWorking       TaskState = "working"
+	TaskStateCompleted     TaskState = "completed"
+	TaskStateFailed        TaskState = "failed"
+	TaskStateCanceled      TaskState = "canceled"
+	TaskStateRejected      TaskState = "rejected"
+	TaskStateAuthRequired  TaskState = "auth-required"
 	TaskStateInputRequired TaskState = "input-required"
 )
 
@@ -176,9 +176,9 @@ type TaskArtifactUpdateEvent struct {
 	Artifact Artifact `json:"artifact"`
 }
 
-// ─── FAXP Quote Types ────────────────────────────────────────────────────────
+// ─── AX Quote Types ────────────────────────────────────────────────────────
 
-// QuoteRequestParams are the params for the quote/request JSON-RPC method.
+// QuoteRequestParams are the params for the ax_quoteRequest JSON-RPC method.
 type QuoteRequestParams struct {
 	SkillID         string           `json:"skill_id,omitempty"`
 	TaskDescription string           `json:"task_description"`
@@ -195,7 +195,7 @@ type QuoteConstraints struct {
 	DeadlineMS  int64   `json:"deadline_ms,omitempty"`
 }
 
-// QuoteResponse is returned by quote/request.
+// QuoteResponse is returned by ax_quoteRequest.
 type QuoteResponse struct {
 	QuoteID    string  `json:"quote_id"`
 	AgentURI   string  `json:"agent_uri"`
@@ -205,7 +205,7 @@ type QuoteResponse struct {
 	Commitment string  `json:"commitment"` // Ed25519 sig (see SPEC §6.1)
 }
 
-// QuoteAcceptParams are the params for the quote/accept JSON-RPC method.
+// QuoteAcceptParams are the params for the ax_quoteAccept JSON-RPC method.
 type QuoteAcceptParams struct {
 	QuoteID string  `json:"quote_id"`
 	Message Message `json:"message"`
@@ -213,7 +213,7 @@ type QuoteAcceptParams struct {
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
-// SendMessageParams are the params for message/send and message/stream.
+// SendMessageParams are the params for a2a_sendMessage and a2a_sendStreamingMessage.
 type SendMessageParams struct {
 	Message       Message            `json:"message"`
 	Configuration *SendConfiguration `json:"configuration,omitempty"`
@@ -226,13 +226,27 @@ type SendConfiguration struct {
 	Blocking            *bool    `json:"blocking,omitempty"`
 }
 
-// GetTaskParams are the params for tasks/get.
+// GetTaskParams are the params for a2a_getTask.
 type GetTaskParams struct {
 	ID            string `json:"id"`
 	HistoryLength *int   `json:"historyLength,omitempty"`
 }
 
-// CancelTaskParams are the params for tasks/cancel.
+// CancelTaskParams are the params for a2a_cancelTask.
 type CancelTaskParams struct {
 	ID string `json:"id"`
 }
+
+// ─── A2A Method Constants ────────────────────────────────────────────────────
+
+const (
+	// A2A standard methods
+	MethodSendMessage          = "a2a_sendMessage"
+	MethodSendStreamingMessage = "a2a_sendStreamingMessage"
+	MethodGetTask              = "a2a_getTask"
+	MethodCancelTask           = "a2a_cancelTask"
+
+	// AX extension methods
+	MethodQuoteRequest = "ax_quoteRequest"
+	MethodQuoteAccept  = "ax_quoteAccept"
+)

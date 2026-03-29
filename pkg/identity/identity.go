@@ -1,4 +1,4 @@
-// Package identity provides Ed25519 key management and message signing for FAXP.
+// Package identity provides Ed25519 key management and message signing for AgentExchange.
 // Every outbound message can be signed; receivers verify using the sender's
 // public key retrieved from the platform registry or Agent Card.
 package identity

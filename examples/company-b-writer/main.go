@@ -1,6 +1,6 @@
 // Company B's report writer agent.
 // Receives structured research data or a topic, returns a formatted markdown report.
-// Supports streaming (message/stream) to demonstrate SSE.
+// Supports streaming (a2a_sendStreamingMessage) to demonstrate SSE.
 package main
 
 import (
@@ -12,17 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zigamedved/faxp/pkg/platform"
-	"github.com/zigamedved/faxp/pkg/protocol"
-	faxphttp "github.com/zigamedved/faxp/pkg/transport/http"
-	"github.com/zigamedved/faxp/pkg/registry"
+	"github.com/zigamedved/agent-exchange/pkg/platform"
+	"github.com/zigamedved/agent-exchange/pkg/protocol"
+	"github.com/zigamedved/agent-exchange/pkg/registry"
+	axhttp "github.com/zigamedved/agent-exchange/pkg/transport/http"
 )
 
 func main() {
-	platformURL := envOr("FAXP_PLATFORM_URL", "http://localhost:8080")
-	apiKey := envOr("FAXP_API_KEY", "faxp_companyb_demo")
-	agentURL := envOr("FAXP_AGENT_URL", "http://localhost:8082")
-	port := envOr("FAXP_AGENT_PORT", "8082")
+	platformURL := envOr("AX_PLATFORM_URL", "http://localhost:8080")
+	apiKey := envOr("AX_API_KEY", "ax_companyb_demo")
+	agentURL := envOr("AX_AGENT_URL", "http://localhost:8082")
+	port := envOr("AX_AGENT_PORT", "8082")
 
 	agent := &WriterAgent{
 		card: &protocol.AgentCard{
@@ -41,11 +41,11 @@ func main() {
 				},
 			},
 			Capabilities: protocol.AgentCapabilities{
-				Streaming:  true,
-				FaxpQuotes: false,
+				Streaming: true,
+				AXQuotes:  false,
 			},
 			Authentication: &protocol.AuthSchemes{Schemes: []string{"Bearer"}},
-			FaxpPricing: &protocol.Pricing{
+			AXPricing: &protocol.Pricing{
 				Model:      "per-call",
 				PerCallUSD: 0.005,
 			},
@@ -69,7 +69,7 @@ func main() {
 		go heartbeat(client, agentID)
 	}
 
-	srv := faxphttp.NewServer(agent)
+	srv := axhttp.NewServer(agent)
 	slog.Info("company-b-writer agent started", "addr", ":"+port, "endpoint", agentURL)
 	if err := http.ListenAndServe(":"+port, srv); err != nil {
 		slog.Error("server error", "err", err)
@@ -93,8 +93,8 @@ func (a *WriterAgent) HandleMessage(_ context.Context, params *protocol.SendMess
 		Status: protocol.TaskStatus{State: protocol.TaskStateCompleted},
 		Artifacts: []protocol.Artifact{
 			{
-				Name:  "report.md",
-				Parts: []protocol.Part{{Kind: "text", Text: report}},
+				Name:      "report.md",
+				Parts:     []protocol.Part{{Kind: "text", Text: report}},
 				LastChunk: &trueBool,
 			},
 		},
@@ -102,7 +102,7 @@ func (a *WriterAgent) HandleMessage(_ context.Context, params *protocol.SendMess
 	return task, nil, nil
 }
 
-func (a *WriterAgent) HandleMessageStream(_ context.Context, params *protocol.SendMessageParams, w *faxphttp.SSEWriter) error {
+func (a *WriterAgent) HandleMessageStream(_ context.Context, params *protocol.SendMessageParams, w *axhttp.SSEWriter) error {
 	topic := extractTopic(params.Message)
 	chunks := buildReportChunks(topic)
 

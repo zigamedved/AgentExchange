@@ -1,14 +1,16 @@
-# FAXP — Fixed Agent eXchange Protocol
+# AgentExchange (AX)
 
-> **Stripe Connect for AI agents.** Publish your agent once. Any organization can discover and call it through the platform — with authentication, metering, and real-time observability included.
+> **The platform layer for A2A.** Publish your agent once. Any organization can discover and call it through the exchange, with authentication, metering, and real-time observability included.
 
-FAXP is an open protocol and hosted platform for cross-organization AI agent communication. It extends [Google's A2A Protocol](https://a2a-protocol.org) with economic primitives (pricing hints, SLA negotiation), cryptographic message signing, and a platform routing layer that makes connecting agents across companies as simple as a single API call.
+AgentExchange is an open source exchange server for [A2A](https://a2a-protocol.org) agents. It extends the A2A Protocol with economic primitives (pricing, quote negotiation), cryptographic message signing, and a platform routing layer that makes cross-organization agent communication as simple as a single API call.
+
+A2A is the protocol. AX is the exchange.
 
 ---
 
-## Why FAXP?
+## Why AgentExchange?
 
-| Problem | Without FAXP | With FAXP |
+| Problem | Without AX | With AX |
 |---|---|---|
 | Cross-company agent calls | Custom per-integration HTTP | One API key, one endpoint |
 | Capability discovery | Email/Slack + docs | `GET /platform/v1/agents?skill=summarize` |
@@ -18,33 +20,44 @@ FAXP is an open protocol and hosted platform for cross-organization AI agent com
 
 ---
 
-## Protocol Design
+## A2A Native
 
-FAXP is a strict superset of [A2A v1.0.0](https://a2a-protocol.org/dev/specification/). Any A2A-compatible agent is a valid FAXP agent. Extensions are additive and gracefully ignored by A2A clients.
+AgentExchange implements the full A2A v1.0.0 protocol:
 
-See [SPEC.md](./SPEC.md) for the full protocol specification.
+- Agent Cards at `/.well-known/a2a/agent-card.json`
+- `a2a_sendMessage` JSON-RPC method
+- `a2a_sendStreamingMessage` with SSE
+- `a2a_getTask`, `a2a_cancelTask`
+- Standard A2A error codes
+
+AX adds (ignored by A2A clients):
+- `x-ax-pricing` in Agent Cards
+- `x-ax-pubkey` in Agent Cards
+- `x-ax-sig` in message metadata
+- `ax_quoteRequest`, `ax_quoteAccept` methods
+- Platform routing API
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- Go 1.21+
+- Go 1.22+
 - `make`
 
 ### Run the demo (3 companies, live dashboard)
 
 ```bash
-# Terminal 1 — start the platform
-make platform
+# Terminal 1: start the exchange
+make serve
 
-# Terminal 2 — start Company B's writer agent (registers with platform on start)
+# Terminal 2: start Company B's writer agent (registers with platform on start)
 make writer
 
-# Terminal 3 — start Company C's analyst agent
+# Terminal 3: start Company C's analyst agent
 make analyst
 
-# Terminal 4 — run Company A's researcher (discovers + calls the others)
+# Terminal 4: run Company A's researcher (discovers + calls the others)
 make researcher
 
 # Open the dashboard
@@ -60,7 +73,32 @@ You'll see Company A's researcher:
 
 All calls appear in the live dashboard with latency, cost, and organization attribution.
 
-![Dashboard view after demo](/examples/FAXP-demo.png)
+---
+
+## CLI
+
+```bash
+# Install
+go install github.com/zigamedved/agent-exchange/cmd/ax@latest
+
+# Start the exchange
+ax serve
+
+# Discover agents
+ax discover --skill summarization --api-key ax_companya_demo
+
+# Call an agent
+ax call --to http://localhost:8082 --text "Hello agent"
+
+# Stream a call
+ax call --to http://localhost:8082 --text "Write a report" --stream
+
+# Fetch an agent card
+ax card --url http://localhost:8082
+
+# Generate identity keys
+ax keys generate --out my-agent.key
+```
 
 ---
 
@@ -70,9 +108,9 @@ All calls appear in the live dashboard with latency, cost, and organization attr
 
 ```go
 import (
-    "github.com/zigamedved/faxp/pkg/protocol"
-    "github.com/zigamedved/faxp/pkg/transport/http"
-    "github.com/zigamedved/faxp/pkg/platform"
+    "github.com/zigamedved/agent-exchange/pkg/protocol"
+    axhttp "github.com/zigamedved/agent-exchange/pkg/transport/http"
+    "github.com/zigamedved/agent-exchange/pkg/platform"
 )
 
 // Define your agent
@@ -87,18 +125,22 @@ card := &protocol.AgentCard{
         Tags: []string{"useful"},
     }},
     Capabilities: protocol.AgentCapabilities{Streaming: true},
-    FaxpPricing: &protocol.Pricing{
+    AXPricing: &protocol.Pricing{
         Model:      "per-call",
         PerCallUSD: 0.001,
     },
 }
 
 agent := &MyAgent{card: card}
-server := faxphttp.NewServer(agent)
+server := axhttp.NewServer(agent)
 
-// Register with the platform
-client := platform.NewClient("http://localhost:8080", "your-api-key")
-client.Register(ctx, "my-agent", "http://localhost:9000", card)
+// Register with the exchange
+client := platform.NewPlatformClient("http://localhost:8080", "your-api-key")
+client.RegisterAgent(ctx, registry.RegisterRequest{
+    Name:        "my-agent",
+    EndpointURL: "http://localhost:9000",
+    AgentCard:   *card,
+})
 
 // Start serving
 http.ListenAndServe(":9000", server)
@@ -110,13 +152,9 @@ http.ListenAndServe(":9000", server)
 // Discover agents by skill
 agents, _ := client.FindAgents(ctx, "report_generation")
 
-// Route a call through the platform
-result, _ := client.RouteMessage(ctx, agents[0].ID, &protocol.SendMessageParams{
-    Message: protocol.Message{
-        Role:  "user",
-        Parts: []protocol.Part{{Kind: "text", Text: "Write a report on AI trends."}},
-    },
-})
+// Route a call through the exchange
+routeURL := client.RouteURL(agents[0].ID)
+// ... send JSON-RPC request to routeURL
 ```
 
 ---
@@ -124,18 +162,18 @@ result, _ := client.RouteMessage(ctx, agents[0].ID, &protocol.SendMessageParams{
 ## Project Structure
 
 ```
-agent-FIX/
+agent-exchange/
 ├── SPEC.md                      Protocol specification
 ├── DEMO.md                      Demo walkthrough
 ├── pkg/
-│   ├── protocol/                Core A2A-compatible types + FAXP extensions
+│   ├── protocol/                Core A2A-compatible types + AX extensions
 │   ├── identity/                Ed25519 key management and message signing
 │   ├── transport/http/          HTTP server, client, and SSE support
-│   ├── registry/                In-memory agent registry
+│   ├── registry/                Pluggable agent registry (Store interface + MemoryStore)
 │   └── platform/                Platform routing, auth, and metering
 ├── cmd/
 │   ├── platform/                Platform server binary
-│   └── fixctl/                  CLI for managing agents and sending messages
+│   └── ax/                      CLI for managing agents and sending messages
 └── examples/
     ├── company-a-researcher/    Demo: research agent (discovers + calls others)
     ├── company-b-writer/        Demo: writing agent (streams reports)
@@ -144,25 +182,27 @@ agent-FIX/
 
 ---
 
-## A2A Compatibility
+## Registry Store Interface
 
-FAXP implements the full A2A v1.0.0 protocol binding:
+The registry uses a pluggable `Store` interface. Ship your own backend:
 
-- ✅ Agent Cards at `/.well-known/agent.json`
-- ✅ `message/send` JSON-RPC method
-- ✅ `message/stream` with SSE
-- ✅ `tasks/get`, `tasks/cancel`
-- ✅ Standard A2A error codes
+```go
+type Store interface {
+    Register(req RegisterRequest) (string, error)
+    Deregister(id string)
+    Heartbeat(id string) error
+    Get(id string) (*Entry, bool)
+    GetByName(org, name string) (*Entry, bool)
+    Search(f SearchFilter) []*Entry
+    All() []*Entry
+    Close() error
+}
+```
 
-FAXP adds (ignored by A2A clients):
-- `x-faxp-pricing` in Agent Cards
-- `x-faxp-pubkey` in Agent Cards
-- `x-faxp-sig` in message metadata
-- `quote/request`, `quote/accept` methods
-- Platform routing API
+The default `MemoryStore` runs in-memory with TTL-based expiration. For production, implement the interface with PostgreSQL, SQLite, or any persistent backend and pass it to `platform.NewWithStore(store)`.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT
