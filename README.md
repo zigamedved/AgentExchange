@@ -1,14 +1,14 @@
-# FAXP — Fixed Agent eXchange Protocol
+# AgentExchange (AX)
 
 > **Stripe Connect for AI agents.** Publish your agent once. Any organization can discover and call it through the platform — with authentication, metering, and real-time observability included.
 
-FAXP is an open protocol and hosted platform for cross-organization AI agent communication. It extends [Google's A2A Protocol](https://a2a-protocol.org) with economic primitives (pricing hints, SLA negotiation), cryptographic message signing, and a platform routing layer that makes connecting agents across companies as simple as a single API call.
+A2A is the protocol. AX is the exchange for cross-organization AI agent communication. It extends [Google's A2A Protocol](https://a2a-protocol.org) with economic primitives (pricing hints, SLA negotiation), cryptographic message signing, and a platform routing layer that makes connecting agents across companies as simple as a single API call.
 
 ---
 
-## Why FAXP?
+## Why AX?
 
-| Problem | Without FAXP | With FAXP |
+| Problem | Without AX | With AX |
 |---|---|---|
 | Cross-company agent calls | Custom per-integration HTTP | One API key, one endpoint |
 | Capability discovery | Email/Slack + docs | `GET /platform/v1/agents?skill=summarize` |
@@ -20,7 +20,7 @@ FAXP is an open protocol and hosted platform for cross-organization AI agent com
 
 ## Protocol Design
 
-FAXP is a strict superset of [A2A v1.0.0](https://a2a-protocol.org/dev/specification/). Any A2A-compatible agent is a valid FAXP agent. Extensions are additive and gracefully ignored by A2A clients.
+AX is a strict superset of [A2A v1.0.0](https://a2a-protocol.org/dev/specification/). Any A2A-compatible agent is a valid AX agent. Extensions are additive and gracefully ignored by A2A clients.
 
 See [SPEC.md](./SPEC.md) for the full protocol specification.
 
@@ -146,7 +146,7 @@ agent-FIX/
 
 ## A2A Compatibility
 
-FAXP implements the full A2A v1.0.0 protocol binding:
+AX implements the full A2A v1.0.0 protocol binding:
 
 - ✅ Agent Cards at `/.well-known/agent.json`
 - ✅ `message/send` JSON-RPC method
@@ -154,7 +154,7 @@ FAXP implements the full A2A v1.0.0 protocol binding:
 - ✅ `tasks/get`, `tasks/cancel`
 - ✅ Standard A2A error codes
 
-FAXP adds (ignored by A2A clients):
+AX adds (ignored by A2A clients):
 - `x-faxp-pricing` in Agent Cards
 - `x-faxp-pubkey` in Agent Cards
 - `x-faxp-sig` in message metadata
