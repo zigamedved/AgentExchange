@@ -62,6 +62,11 @@ func (s *MemoryStore) Register(req RegisterRequest) (string, error) {
 		s.byName[nk] = id
 	}
 
+	vis := req.Visibility
+	if vis == "" {
+		vis = AgentPublic
+	}
+
 	now := time.Now()
 	s.entries[id] = &memoryEntry{
 		Entry: Entry{
@@ -69,6 +74,7 @@ func (s *MemoryStore) Register(req RegisterRequest) (string, error) {
 			Name:         req.Name,
 			Organization: req.Organization,
 			EndpointURL:  req.EndpointURL,
+			Visibility:   vis,
 			AgentCard:    req.AgentCard,
 			RegisteredAt: now.Format(time.RFC3339),
 			LastSeen:     now.Format(time.RFC3339),
@@ -160,6 +166,10 @@ func (s *MemoryStore) Close() error {
 }
 
 func matchesFilter(e *Entry, f SearchFilter) bool {
+	// Visibility: private agents are only visible to their own org
+	if e.Visibility == AgentPrivate && f.CallerOrg != "" && !strings.EqualFold(e.Organization, f.CallerOrg) {
+		return false
+	}
 	if f.Organization != "" && !strings.EqualFold(e.Organization, f.Organization) {
 		return false
 	}

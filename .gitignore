@@ -1,0 +1,6 @@
+*.db
+*.db-shm
+*.db-wal
+bin/
+ax.key
+.ax/
