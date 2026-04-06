@@ -37,10 +37,21 @@ type QuoteAgent interface {
 	HandleQuoteAccept(ctx context.Context, params *protocol.QuoteAcceptParams) (*protocol.Task, *protocol.Message, error)
 }
 
+// TaskAgent extends Agent with task lifecycle support.
+// If your agent implements this, getTask and cancelTask are delegated to it.
+// Otherwise, the Server uses its built-in task store.
+type TaskAgent interface {
+	Agent
+	GetTask(ctx context.Context, taskID string) (*protocol.Task, error)
+	CancelTask(ctx context.Context, taskID string) (*protocol.Task, error)
+}
+
 // Server is an HTTP handler that dispatches JSON-RPC requests to an Agent.
+// It includes a built-in task store that caches tasks returned by HandleMessage.
 // Mount it as the root handler of your agent's HTTP server.
 type Server struct {
 	agent  Agent
+	tasks  *taskStore
 	logger *slog.Logger
 }
 
@@ -48,6 +59,7 @@ type Server struct {
 func NewServer(agent Agent) *Server {
 	return &Server{
 		agent:  agent,
+		tasks:  newTaskStore(),
 		logger: slog.Default(),
 	}
 }
@@ -102,7 +114,7 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 	case protocol.MethodGetTask:
 		s.handleTasksGet(w, r, &req)
 	case protocol.MethodCancelTask:
-		s.writeError(w, req.ID, protocol.CodeUnsupportedOperation, "task cancellation not supported", nil)
+		s.handleTaskCancel(w, r, &req)
 	case protocol.MethodQuoteRequest:
 		s.handleQuoteRequest(w, r, &req)
 	case protocol.MethodQuoteAccept:
@@ -123,6 +135,11 @@ func (s *Server) handleMessageSend(w http.ResponseWriter, _ *http.Request, req *
 	if err != nil {
 		s.writeError(w, req.ID, protocol.CodeInternalError, err.Error(), nil)
 		return
+	}
+
+	// Store the task for later retrieval via a2a_getTask
+	if task != nil {
+		s.tasks.Store(task)
 	}
 
 	var result any
@@ -165,8 +182,62 @@ func (s *Server) handleMessageStream(w http.ResponseWriter, r *http.Request, req
 }
 
 func (s *Server) handleTasksGet(w http.ResponseWriter, _ *http.Request, req *protocol.Request) {
-	// Minimal implementation — agents that want full task tracking should override
-	s.writeError(w, req.ID, protocol.CodeTaskNotFound, "task not found", nil)
+	var params protocol.GetTaskParams
+	if err := req.ParseParams(&params); err != nil {
+		s.writeError(w, req.ID, protocol.CodeInvalidParams, "invalid params: "+err.Error(), nil)
+		return
+	}
+
+	// If the agent implements TaskAgent, delegate to it
+	if ta, ok := s.agent.(TaskAgent); ok {
+		task, err := ta.GetTask(context.Background(), params.ID)
+		if err != nil {
+			s.writeError(w, req.ID, protocol.CodeTaskNotFound, err.Error(), nil)
+			return
+		}
+		s.writeSuccess(w, req.ID, task)
+		return
+	}
+
+	// Otherwise use the built-in task store
+	task, ok := s.tasks.Get(params.ID)
+	if !ok {
+		s.writeError(w, req.ID, protocol.CodeTaskNotFound, "task not found", nil)
+		return
+	}
+	s.writeSuccess(w, req.ID, task)
+}
+
+func (s *Server) handleTaskCancel(w http.ResponseWriter, _ *http.Request, req *protocol.Request) {
+	var params protocol.CancelTaskParams
+	if err := req.ParseParams(&params); err != nil {
+		s.writeError(w, req.ID, protocol.CodeInvalidParams, "invalid params: "+err.Error(), nil)
+		return
+	}
+
+	// If the agent implements TaskAgent, delegate to it
+	if ta, ok := s.agent.(TaskAgent); ok {
+		task, err := ta.CancelTask(context.Background(), params.ID)
+		if err != nil {
+			s.writeError(w, req.ID, protocol.CodeUnsupportedOperation, err.Error(), nil)
+			return
+		}
+		if task != nil {
+			s.tasks.Store(task) // update cache
+		}
+		s.writeSuccess(w, req.ID, task)
+		return
+	}
+
+	// Default: mark task as canceled in the store if it exists
+	task, ok := s.tasks.Get(params.ID)
+	if !ok {
+		s.writeError(w, req.ID, protocol.CodeTaskNotFound, "task not found", nil)
+		return
+	}
+	task.Status.State = protocol.TaskStateCanceled
+	s.tasks.Store(task)
+	s.writeSuccess(w, req.ID, task)
 }
 
 func (s *Server) handleQuoteRequest(w http.ResponseWriter, _ *http.Request, req *protocol.Request) {

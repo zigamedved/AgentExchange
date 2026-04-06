@@ -1,10 +1,43 @@
 # AgentExchange (AX)
 
-> **The platform layer for A2A.** Publish your agent once. Any organization can discover and call it through the exchange, with authentication, metering, and real-time observability included.
+> **The framework for A2A agent exchanges.** Build a marketplace, an internal agent platform, or anything in between.
 
-AgentExchange is an open source exchange server for [A2A](https://a2a-protocol.org) agents. It extends the A2A Protocol with economic primitives (pricing, quote negotiation), cryptographic message signing, and a platform routing layer that makes cross-organization agent communication as simple as a single API call.
+AgentExchange is an open-source Go framework for building [A2A](https://a2a-protocol.org) agent exchanges. It provides agent discovery, call routing, authentication, metering, and real-time observability — all configurable and extensible.
 
 A2A is the protocol. AX is the exchange.
+
+---
+
+## Use it as a framework
+
+```go
+import "github.com/zigamedved/agent-exchange/pkg/platform"
+
+// Public marketplace with invite-gated registration
+p := platform.New(
+    platform.WithStore(sqliteStore),
+    platform.WithRegistration(platform.RegistrationInvite),
+    platform.WithInviteStore(invites),
+    platform.WithDefaultCredits(50),
+    platform.WithOnCall(func(rec *platform.CallRecord) {
+        // send to your billing system
+    }),
+)
+
+// Internal enterprise exchange
+p := platform.New(
+    platform.WithStore(sqliteStore),
+    platform.WithRegistration(platform.RegistrationClosed),
+    platform.WithOnCall(func(rec *platform.CallRecord) {
+        // send to Datadog / Grafana
+    }),
+)
+
+// Local development (zero config)
+p := platform.New()
+
+http.ListenAndServe(":8080", p.Handler())
+```
 
 ---
 
@@ -15,176 +48,146 @@ A2A is the protocol. AX is the exchange.
 | Cross-company agent calls | Custom per-integration HTTP | One API key, one endpoint |
 | Capability discovery | Email/Slack + docs | `GET /platform/v1/agents?skill=summarize` |
 | Auth between orgs | Manual key exchange | Platform-managed, per-org keys |
-| Billing | Invoice at month end | Per-call metering, automatic |
-| Observability | Nothing | Live call feed, latency, spend |
+| Billing | Invoice at month end | Per-call metering, credits, hooks |
+| Observability | Nothing | Live dashboard, latency, spend |
+| Agent visibility | Everything public | Public / private per agent |
 
 ---
 
 ## A2A Native
 
-AgentExchange implements the full A2A v1.0.0 protocol:
+AgentExchange implements the A2A v1.0.0 protocol and extends it:
 
-- Agent Cards at `/.well-known/a2a/agent-card.json`
-- `a2a_sendMessage` JSON-RPC method
-- `a2a_sendStreamingMessage` with SSE
-- `a2a_getTask`, `a2a_cancelTask`
-- Standard A2A error codes
+**A2A standard:** Agent Cards, `a2a_sendMessage`, `a2a_sendStreamingMessage`, SSE streaming, standard error codes.
 
-AX adds (ignored by A2A clients):
-- `x-ax-pricing` in Agent Cards
-- `x-ax-pubkey` in Agent Cards
-- `x-ax-sig` in message metadata
-- `ax_quoteRequest`, `ax_quoteAccept` methods
-- Platform routing API
+**AX extensions** (gracefully ignored by A2A clients):
+- `x-ax-pricing` — pricing in Agent Cards
+- `x-ax-pubkey` + `x-ax-sig` — Ed25519 message signing
+- `ax_quoteRequest` / `ax_quoteAccept` — price negotiation
+- Platform routing, auth, metering, and observability
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- Go 1.22+
-- `make`
-
-### Run the demo (3 companies, live dashboard)
+### Run the demo
 
 ```bash
 # Terminal 1: start the exchange
 make serve
 
-# Terminal 2: start Company B's writer agent (registers with platform on start)
-make writer
+# Terminal 2: start the code analyzer agent
+make analyzer
 
-# Terminal 3: start Company C's analyst agent
-make analyst
-
-# Terminal 4: run Company A's researcher (discovers + calls the others)
-make researcher
+# Terminal 3: discover and call
+go run ./cmd/ax discover --api-key ax_companya_demo --skill code-analysis
+go run ./cmd/ax call --to http://localhost:8080/platform/v1/route/<agent-id> \
+  --api-key ax_companya_demo --text 'func hello() { fmt.Println("hi") }'
 
 # Open the dashboard
 open http://localhost:8080
 ```
 
-You'll see Company A's researcher:
-1. Query the platform registry for agents with `report_generation` capability
-2. Route a call to Company B's writer through the platform
-3. Receive a streaming report response
-4. Route the report to Company C's analyst
-5. Display the final structured analysis
+### Claude Code integration (MCP)
 
-All calls appear in the live dashboard with latency, cost, and organization attribution.
+AX ships with an MCP server. Add to your project's `.mcp.json`:
 
----
-
-## CLI
-
-```bash
-# Install
-go install github.com/zigamedved/agent-exchange/cmd/ax@latest
-
-# Start the exchange
-ax serve
-
-# Discover agents
-ax discover --skill summarization --api-key ax_companya_demo
-
-# Call an agent
-ax call --to http://localhost:8082 --text "Hello agent"
-
-# Stream a call
-ax call --to http://localhost:8082 --text "Write a report" --stream
-
-# Fetch an agent card
-ax card --url http://localhost:8082
-
-# Generate identity keys
-ax keys generate --out my-agent.key
-```
-
----
-
-## SDK Usage
-
-### Register your agent
-
-```go
-import (
-    "github.com/zigamedved/agent-exchange/pkg/protocol"
-    axhttp "github.com/zigamedved/agent-exchange/pkg/transport/http"
-    "github.com/zigamedved/agent-exchange/pkg/platform"
-)
-
-// Define your agent
-card := &protocol.AgentCard{
-    Name:        "My Agent",
-    Description: "Does useful things.",
-    URL:         "http://localhost:9000",
-    Version:     "1.0.0",
-    Skills: []protocol.Skill{{
-        ID:   "my_skill",
-        Name: "My Skill",
-        Tags: []string{"useful"},
-    }},
-    Capabilities: protocol.AgentCapabilities{Streaming: true},
-    AXPricing: &protocol.Pricing{
-        Model:      "per-call",
-        PerCallUSD: 0.001,
-    },
+```json
+{
+  "mcpServers": {
+    "agent-exchange": {
+      "command": "go",
+      "args": ["run", "./cmd/mcp"],
+      "cwd": "<path-to-agent-exchange>",
+      "env": { "AX_PLATFORM_URL": "http://localhost:8080" }
+    }
+  }
 }
-
-agent := &MyAgent{card: card}
-server := axhttp.NewServer(agent)
-
-// Register with the exchange
-client := platform.NewPlatformClient("http://localhost:8080", "your-api-key")
-client.RegisterAgent(ctx, registry.RegisterRequest{
-    Name:        "my-agent",
-    EndpointURL: "http://localhost:9000",
-    AgentCard:   *card,
-})
-
-// Start serving
-http.ListenAndServe(":9000", server)
 ```
 
-### Call another agent
+Claude Code gets `ax_discover`, `ax_call`, `ax_list_agents`, and `ax_my_org` tools. On first use, the MCP server auto-registers a private org with free credits.
+
+---
+
+## Architecture
+
+```
+Agent A ──→ AX Platform ──→ Agent B
+            │
+            ├── Auth (API keys, org-scoped)
+            ├── Registry (discover by skill/org/name)
+            ├── Routing (proxy calls between orgs)
+            ├── Metering (per-call, per-org spend)
+            ├── Credits (deduct on cross-org calls)
+            ├── Signatures (Ed25519 verification)
+            ├── Quotes (price negotiation)
+            └── Dashboard (real-time SSE)
+```
+
+---
+
+## Package Structure
+
+```
+pkg/                              ← the framework
+  platform/                       ← exchange server (configurable via options)
+    auth.go                       ← Auth interface + MemoryAuth
+    invite.go                     ← InviteStore interface + MemoryInviteStore
+    meter.go                      ← call metering + quote tracking
+    platform.go                   ← routing, endpoints, options pattern
+    dashboard.go                  ← embedded web dashboard
+  protocol/                       ← A2A + AX types (pure data, no deps)
+  registry/                       ← Store interface + MemoryStore + SQLiteStore
+  transport/http/                 ← agent HTTP server + client + SSE
+  identity/                       ← Ed25519 signing and verification
+
+cmd/                              ← reference binaries
+  ax/                             ← CLI (serve, discover, call, keys)
+  mcp/                            ← MCP server for Claude Code
+  platform/                       ← standalone platform server
+
+examples/
+  marketplace/                    ← public marketplace (invite-gated, credits, SQLite)
+  enterprise/                     ← internal exchange (closed, no billing, SQLite)
+  code-analyzer/                  ← sample agent (static code analysis)
+  company-a-researcher/           ← demo orchestrator agent
+  company-b-writer/               ← demo streaming agent
+  company-c-analyst/              ← demo analysis agent
+```
+
+---
+
+## Configuration
+
+### Platform Options
+
+| Option | Description | Default |
+|---|---|---|
+| `WithStore(s)` | Registry backend (`MemoryStore`, `SQLiteStore`, or custom) | `MemoryStore` |
+| `WithAuth(a)` | Auth backend (implement `Auth` interface) | `MemoryAuth` |
+| `WithRegistration(mode)` | `Open`, `Invite`, or `Closed` | `Open` |
+| `WithDefaultCredits(n)` | Credits given to new orgs | `100` |
+| `WithOnCall(hook)` | Callback after each routed call | `nil` |
+| `WithInviteStore(s)` | Invite store for invite-gated mode | `nil` |
+| `WithSignatureVerification(b)` | Enforce Ed25519 signatures | `false` |
+| `WithLogger(l)` | Custom slog logger | `slog.Default()` |
+
+### Interfaces
+
+**Auth** — plug in your own org/key management:
 
 ```go
-// Discover agents by skill
-agents, _ := client.FindAgents(ctx, "report_generation")
-
-// Route a call through the exchange
-routeURL := client.RouteURL(agents[0].ID)
-// ... send JSON-RPC request to routeURL
+type Auth interface {
+    Authenticate(apiKey string) *Org
+    Register(name string, visibility OrgVisibility) (*Org, error)
+    GetByID(id string) *Org
+    All() []*Org
+    DeductCredits(apiKey string, amount float64) error
+    AddCredits(apiKey string, amount float64) error
+}
 ```
 
----
-
-## Project Structure
-
-```
-agent-exchange/
-├── SPEC.md                      Protocol specification
-├── DEMO.md                      Demo walkthrough
-├── pkg/
-│   ├── protocol/                Core A2A-compatible types + AX extensions
-│   ├── identity/                Ed25519 key management and message signing
-│   ├── transport/http/          HTTP server, client, and SSE support
-│   ├── registry/                Pluggable agent registry (Store interface + MemoryStore)
-│   └── platform/                Platform routing, auth, and metering
-├── cmd/
-│   ├── platform/                Platform server binary
-│   └── ax/                      CLI for managing agents and sending messages
-└── examples/
-    ├── company-a-researcher/    Demo: research agent (discovers + calls others)
-    ├── company-b-writer/        Demo: writing agent (streams reports)
-    └── company-c-analyst/       Demo: analysis agent (returns structured metrics)
-```
-
----
-
-## Registry Store Interface
-
-The registry uses a pluggable `Store` interface. Ship your own backend:
+**Store** — plug in your own agent registry:
 
 ```go
 type Store interface {
@@ -199,4 +202,70 @@ type Store interface {
 }
 ```
 
-The default `MemoryStore` runs in-memory with TTL-based expiration. For production, implement the interface with PostgreSQL, SQLite, or any persistent backend and pass it to `platform.NewWithStore(store)`.
+**InviteStore** — plug in your own invite system:
+
+```go
+type InviteStore interface {
+    Create(createdBy string) (string, error)
+    Validate(code string) error
+    Redeem(code string, orgID string) error
+    List() []*Invite
+}
+```
+
+---
+
+## Org & Agent Visibility
+
+- **Public org** — listed as a publisher on the marketplace
+- **Private org** — consumer only, not listed
+- **Public agent** — discoverable by all orgs
+- **Private agent** — only visible within the owning org
+
+Intra-org calls are always free (no credit deduction).
+
+---
+
+## CLI
+
+```bash
+ax serve                                    # start the exchange
+ax discover --skill code-analysis           # find agents
+ax call --to <url> --text "analyze this"    # call an agent
+ax call --to <url> --text "..." --stream    # streaming call
+ax card --url http://localhost:8082         # fetch agent card
+ax keys generate                            # generate Ed25519 keys
+```
+
+---
+
+## Building an Agent
+
+```go
+type MyAgent struct {
+    card *protocol.AgentCard
+}
+
+func (a *MyAgent) Card() *protocol.AgentCard { return a.card }
+
+func (a *MyAgent) HandleMessage(ctx context.Context, params *protocol.SendMessageParams) (*protocol.Task, *protocol.Message, error) {
+    // Your agent logic here
+    return task, nil, nil
+}
+
+// Start serving
+server := axhttp.NewServer(agent)
+http.ListenAndServe(":9000", server)
+```
+
+See `examples/code-analyzer/` for a complete working agent.
+
+---
+
+## Protocol Specification
+
+See [SPEC.md](SPEC.md) for the full protocol specification including message format, signing, quotes, and error codes.
+
+## License
+
+Apache 2.0

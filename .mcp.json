@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agent-exchange": {
+      "command": "go",
+      "args": ["run", "./cmd/mcp"],
+      "env": {
+        "AX_PLATFORM_URL": "http://localhost:8080"
+      }
+    }
+  }
+}

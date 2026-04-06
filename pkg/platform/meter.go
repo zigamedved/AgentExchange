@@ -26,7 +26,9 @@ type CallRecord struct {
 type Meter struct {
 	mu      sync.RWMutex
 	records []*CallRecord
-	spend   map[string]float64 // key: org name (matches CallerOrg on CallRecord)
+	spend   map[string]float64      // key: org name (matches CallerOrg on CallRecord)
+	quotes  map[string]*QuoteRecord // key: quote ID
+	tasks   map[string]*TaskRecord  // key: task ID
 }
 
 // NewMeter returns an empty Meter.
@@ -96,4 +98,86 @@ func (m *Meter) SpendByOrg() map[string]float64 {
 		out[k] = v
 	}
 	return out
+}
+
+// ─── Quote Tracking ─────────────────────────────────────────────────────────
+
+// QuoteRecord tracks an accepted quote for price binding.
+type QuoteRecord struct {
+	QuoteID   string
+	AgentID   string
+	CallerOrg string
+	PriceUSD  float64
+	SLAMS     int64
+	ExpiresAt int64
+	Accepted  bool
+}
+
+// StoreQuote records a quote response from an agent.
+func (m *Meter) StoreQuote(qr *QuoteRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.quotes == nil {
+		m.quotes = make(map[string]*QuoteRecord)
+	}
+	m.quotes[qr.QuoteID] = qr
+}
+
+// GetQuote retrieves a stored quote by ID.
+func (m *Meter) GetQuote(quoteID string) *QuoteRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.quotes == nil {
+		return nil
+	}
+	return m.quotes[quoteID]
+}
+
+// ─── Task Tracking ──────────────────────────────────────────────────────────
+
+// TaskRecord is the platform's lightweight view of an agent task.
+type TaskRecord struct {
+	TaskID    string `json:"task_id"`
+	AgentID   string `json:"agent_id"`
+	CallerOrg string `json:"caller_org"`
+	State     string `json:"state"` // submitted, working, completed, failed, canceled
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// StoreTask records or updates a task.
+func (m *Meter) StoreTask(tr *TaskRecord) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.tasks == nil {
+		m.tasks = make(map[string]*TaskRecord)
+	}
+	tr.UpdatedAt = time.Now()
+	if existing, ok := m.tasks[tr.TaskID]; ok {
+		existing.State = tr.State
+		existing.UpdatedAt = tr.UpdatedAt
+	} else {
+		tr.CreatedAt = time.Now()
+		m.tasks[tr.TaskID] = tr
+	}
+}
+
+// GetTask retrieves a task record by ID.
+func (m *Meter) GetTask(taskID string) *TaskRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.tasks == nil {
+		return nil
+	}
+	return m.tasks[taskID]
+}
+
+// UpdateTaskState updates just the state of a tracked task.
+func (m *Meter) UpdateTaskState(taskID, state string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if t, ok := m.tasks[taskID]; ok {
+		t.State = state
+		t.UpdatedAt = time.Now()
+	}
 }
