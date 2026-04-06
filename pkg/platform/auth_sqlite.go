@@ -156,6 +156,12 @@ func (a *SQLiteAuth) All() []*Org {
 	return out
 }
 
+// DB returns the underlying *sql.DB so it can be shared with other stores
+// (e.g. SQLiteInviteStore) to avoid multiple connections to the same file.
+func (a *SQLiteAuth) DB() *sql.DB {
+	return a.db
+}
+
 // Close closes the database connection.
 func (a *SQLiteAuth) Close() error {
 	return a.db.Close()
@@ -191,11 +197,14 @@ func (a *SQLiteAuth) scanOrgRow(rows *sql.Rows) *Org {
 
 // SQLiteInviteStore is a persistent InviteStore backed by SQLite.
 type SQLiteInviteStore struct {
-	db *sql.DB
-	mu sync.RWMutex
+	db    *sql.DB
+	mu    sync.RWMutex
+	ownDB bool // true when this store opened the DB and must close it
 }
 
-// NewSQLiteInviteStore opens (or creates) invite tables in the given SQLite database.
+// NewSQLiteInviteStore opens (or creates) a SQLite database at path and
+// migrates the invites table. Use NewSQLiteInviteStoreFromDB to share an
+// existing *sql.DB (e.g. from SQLiteAuth) and avoid a second connection.
 func NewSQLiteInviteStore(path string) (*SQLiteInviteStore, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -205,7 +214,28 @@ func NewSQLiteInviteStore(path string) (*SQLiteInviteStore, error) {
 		db.Close()
 		return nil, err
 	}
-	_, err = db.Exec(`
+	if err := migrateInvites(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &SQLiteInviteStore{db: db, ownDB: true}, nil
+}
+
+// NewSQLiteInviteStoreFromDB creates an invite store that shares an existing
+// *sql.DB. The caller retains ownership of the DB — Close() on this store is
+// a no-op. Use this together with SQLiteAuth.DB() to avoid duplicate connections:
+//
+//	auth, _ := platform.NewSQLiteAuth(dbPath, credits)
+//	invites, _ := platform.NewSQLiteInviteStoreFromDB(auth.DB())
+func NewSQLiteInviteStoreFromDB(db *sql.DB) (*SQLiteInviteStore, error) {
+	if err := migrateInvites(db); err != nil {
+		return nil, err
+	}
+	return &SQLiteInviteStore{db: db, ownDB: false}, nil
+}
+
+func migrateInvites(db *sql.DB) error {
+	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS invites (
 			code        TEXT PRIMARY KEY,
 			created_by  TEXT NOT NULL,
@@ -216,10 +246,9 @@ func NewSQLiteInviteStore(path string) (*SQLiteInviteStore, error) {
 		)
 	`)
 	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("migrate invites: %w", err)
+		return fmt.Errorf("migrate invites: %w", err)
 	}
-	return &SQLiteInviteStore{db: db}, nil
+	return nil
 }
 
 func (s *SQLiteInviteStore) Create(createdBy string) (string, error) {
@@ -303,7 +332,11 @@ func (s *SQLiteInviteStore) List() []*Invite {
 	return out
 }
 
-// Close closes the database connection.
+// Close closes the database connection only if this store owns it.
+// Stores created via NewSQLiteInviteStoreFromDB do not own the DB.
 func (s *SQLiteInviteStore) Close() error {
-	return s.db.Close()
+	if s.ownDB {
+		return s.db.Close()
+	}
+	return nil
 }

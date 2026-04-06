@@ -1,4 +1,4 @@
-.PHONY: platform serve writer analyst researcher analyzer mcp build tidy clean
+.PHONY: platform serve writer analyst researcher analyzer mcp enterprise marketplace build tidy clean docker
 
 # Start the platform server (registry + routing + dashboard)
 platform:
@@ -44,10 +44,21 @@ mcp:
 	AX_API_KEY=ax_companya_demo \
 	go run ./cmd/mcp
 
+# Run enterprise example (closed registration, SQLite persistence)
+enterprise:
+	go run ./examples/enterprise
+
+# Run marketplace example (invite-gated registration, credits, SQLite persistence)
+marketplace:
+	go run ./examples/marketplace
+
 build:
 	go build -o bin/ax-platform ./cmd/platform
 	go build -o bin/ax ./cmd/ax
 	go build -o bin/ax-mcp ./cmd/mcp
+
+docker:
+	docker build -t agent-exchange .
 
 tidy:
 	go mod tidy

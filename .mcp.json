@@ -3,7 +3,6 @@
     "agent-exchange": {
       "command": "go",
       "args": ["run", "./cmd/mcp"],
-      "cwd": "/Users/larsencundric/Documents/projects/AgentExchange",
       "env": {
         "AX_PLATFORM_URL": "http://localhost:8080"
       }

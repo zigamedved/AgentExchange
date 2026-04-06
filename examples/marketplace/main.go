@@ -40,12 +40,12 @@ func main() {
 	}
 	defer auth.Close()
 
-	invites, err := platform.NewSQLiteInviteStore(dbPath)
+	// Share auth's DB connection for the invite store to avoid a second SQLite connection.
+	invites, err := platform.NewSQLiteInviteStoreFromDB(auth.DB())
 	if err != nil {
-		slog.Error("failed to open invite database", "err", err)
+		slog.Error("failed to migrate invite tables", "err", err)
 		os.Exit(1)
 	}
-	defer invites.Close()
 
 	// Seed demo orgs
 	auth.Seed("demo-publisher", "Demo Publisher", "ax_demo_pub", platform.OrgPublic, 1000)

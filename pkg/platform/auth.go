@@ -64,6 +64,7 @@ type Auth interface {
 type MemoryAuth struct {
 	mu             sync.RWMutex
 	orgs           map[string]*Org // key: api key
+	ids            map[string]*Org // key: org ID (secondary index for O(1) GetByID)
 	defaultCredits float64
 }
 
@@ -71,6 +72,7 @@ type MemoryAuth struct {
 func NewMemoryAuth(defaultCredits float64) *MemoryAuth {
 	return &MemoryAuth{
 		orgs:           make(map[string]*Org),
+		ids:            make(map[string]*Org),
 		defaultCredits: defaultCredits,
 	}
 }
@@ -79,7 +81,7 @@ func NewMemoryAuth(defaultCredits float64) *MemoryAuth {
 func (a *MemoryAuth) Seed(id, name, key string, vis OrgVisibility, credits float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.orgs[key] = &Org{
+	org := &Org{
 		ID:         id,
 		Name:       name,
 		APIKey:     key,
@@ -87,6 +89,8 @@ func (a *MemoryAuth) Seed(id, name, key string, vis OrgVisibility, credits float
 		Credits:    credits,
 		CreatedAt:  time.Now(),
 	}
+	a.orgs[key] = org
+	a.ids[id] = org
 }
 
 func (a *MemoryAuth) Authenticate(apiKey string) *Org {
@@ -118,6 +122,7 @@ func (a *MemoryAuth) Register(name string, visibility OrgVisibility) (*Org, erro
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.orgs[key] = org
+	a.ids[id] = org
 	return org, nil
 }
 
@@ -149,12 +154,7 @@ func (a *MemoryAuth) AddCredits(apiKey string, amount float64) error {
 func (a *MemoryAuth) GetByID(id string) *Org {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	for _, o := range a.orgs {
-		if o.ID == id {
-			return o
-		}
-	}
-	return nil
+	return a.ids[id]
 }
 
 func (a *MemoryAuth) All() []*Org {

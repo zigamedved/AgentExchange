@@ -47,8 +47,9 @@ func main() {
 		var err error
 		apiKey, err = autoRegister(platformURL)
 		if err != nil {
-			// Fall back to demo key if auto-registration fails
-			apiKey = "ax_companya_demo"
+			fmt.Fprintf(os.Stderr, "ax-mcp: auto-registration failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "ax-mcp: set AX_API_KEY or ensure the platform is running at %s\n", platformURL)
+			os.Exit(1)
 		}
 	}
 
