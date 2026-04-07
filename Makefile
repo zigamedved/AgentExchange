@@ -1,4 +1,4 @@
-.PHONY: platform serve writer analyst researcher analyzer mcp enterprise marketplace build tidy clean docker
+.PHONY: platform serve writer analyst researcher analyzer mcp enterprise marketplace build test vet tidy clean docker
 
 # Start the platform server (registry + routing + dashboard)
 platform:
@@ -60,8 +60,15 @@ build:
 docker:
 	docker build -t agent-exchange .
 
+test:
+	go test -race ./...
+
 tidy:
-	go mod tidy
+	go mod tidy && go mod verify
+
+vet:
+	go vet ./...
+
 
 clean:
 	rm -rf bin/
