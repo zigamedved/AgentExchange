@@ -2,7 +2,7 @@
 # Build arg AGENT_PKG selects which example to build, e.g. ./examples/company-b-writer
 ARG AGENT_PKG=./examples/company-b-writer
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
