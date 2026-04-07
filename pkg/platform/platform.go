@@ -131,6 +131,11 @@ func (p *Platform) Auth() Auth {
 func (p *Platform) Handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// Health
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+
 	// Dashboard
 	mux.HandleFunc("GET /", p.dashboard.ServeHTTP)
 	mux.HandleFunc("GET /platform/v1/events", p.handleEvents)

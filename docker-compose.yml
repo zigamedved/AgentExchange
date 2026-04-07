@@ -1,0 +1,48 @@
+services:
+  platform:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      AX_PLATFORM_ADDR: ":8080"
+      LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  writer:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        AGENT_PKG: ./examples/company-b-writer
+    ports:
+      - "8082:8082"
+    environment:
+      AX_PLATFORM_URL: http://platform:8080
+      AX_API_KEY: ax_companyb_demo
+      AX_AGENT_URL: http://writer:8082
+      AX_AGENT_PORT: "8082"
+    depends_on:
+      platform:
+        condition: service_healthy
+
+  analyst:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+      args:
+        AGENT_PKG: ./examples/company-c-analyst
+    ports:
+      - "8083:8083"
+    environment:
+      AX_PLATFORM_URL: http://platform:8080
+      AX_API_KEY: ax_companyc_demo
+      AX_AGENT_URL: http://analyst:8083
+      AX_AGENT_PORT: "8083"
+    depends_on:
+      platform:
+        condition: service_healthy
