@@ -1,18 +1,20 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
 
-# Download dependencies first (cached layer)
 COPY go.mod go.sum ./
-RUN go mod download
+# Cache downloaded modules across builds (invalidated only when go.mod/go.sum change)
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
 
 # modernc.org/sqlite is pure Go — CGO_ENABLED=0 is safe.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/ax-platform ./cmd/platform
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/ax          ./cmd/ax
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/ax-mcp      ./cmd/mcp
+# Build cache mount keeps compiled packages between runs so only changed files recompile.
+# ax and ax-mcp are CLI tools — not needed inside the container image.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o bin/ax-platform ./cmd/platform
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM alpine:3.21

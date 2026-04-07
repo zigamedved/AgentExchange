@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/zigamedved/agent-exchange/pkg/platform"
 )
@@ -14,6 +15,18 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
+
+	// Configure log level via LOG_LEVEL env var (debug, info, warn, error).
+	logLevel := slog.LevelInfo
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "warn", "warning":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
 
 	// Create platform with demo configuration
 	p := platform.New(

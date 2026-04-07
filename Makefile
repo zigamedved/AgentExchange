@@ -1,4 +1,4 @@
-.PHONY: platform serve writer analyst researcher analyzer mcp enterprise marketplace build test vet tidy clean docker
+.PHONY: platform serve writer analyst researcher analyzer mcp enterprise marketplace build test vet tidy clean docker dev down
 
 # Start the platform server (registry + routing + dashboard)
 platform:
@@ -59,6 +59,14 @@ build:
 
 docker:
 	docker build -t agent-exchange .
+
+# Start the full demo stack (platform + writer + analyst) via Docker Compose (detached)
+dev:
+	docker compose up --build -d
+
+# Tear down the Docker Compose stack
+down:
+	docker compose down
 
 test:
 	go test -race ./...

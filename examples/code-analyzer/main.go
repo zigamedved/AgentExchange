@@ -333,13 +333,13 @@ func assessComplexity(code, lang string, codeLines, funcCount int) string {
 func formatReport(r analysisResult) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Code Analysis Report\n\n"))
+	sb.WriteString("# Code Analysis Report\n\n")
 	sb.WriteString(fmt.Sprintf("**Language:** %s\n\n", r.Language))
 
 	// Line counts
 	sb.WriteString("## Line Counts\n\n")
-	sb.WriteString(fmt.Sprintf("| Metric | Count |\n"))
-	sb.WriteString(fmt.Sprintf("|--------|-------|\n"))
+	sb.WriteString("| Metric | Count |\n")
+	sb.WriteString("|--------|-------|\n")
 	sb.WriteString(fmt.Sprintf("| Total lines | %d |\n", r.TotalLines))
 	sb.WriteString(fmt.Sprintf("| Code lines | %d |\n", r.CodeLines))
 	sb.WriteString(fmt.Sprintf("| Comment lines | %d |\n", r.CommentLines))
@@ -378,14 +378,14 @@ func formatReport(r analysisResult) string {
 	}
 
 	// Complexity
-	sb.WriteString(fmt.Sprintf("\n## Complexity\n\n"))
+	sb.WriteString("\n## Complexity\n\n")
 	sb.WriteString(fmt.Sprintf("**Overall complexity:** %s\n", r.Complexity))
 	if len(r.Functions) > 0 && r.CodeLines > 0 {
 		avgLen := r.CodeLines / len(r.Functions)
 		sb.WriteString(fmt.Sprintf("**Average function length:** ~%d lines\n", avgLen))
 	}
 
-	sb.WriteString(fmt.Sprintf("\n---\n*Analyzed by Code Analyzer Agent · AgentExchange*\n"))
+	sb.WriteString("\n---\n*Analyzed by Code Analyzer Agent · AgentExchange*\n")
 	return sb.String()
 }
 
