@@ -70,7 +70,7 @@ AgentExchange implements the A2A v1.0.0 protocol and extends it:
 
 ## Quick Start
 
-### Run the demo
+### Run locally (Go toolchain)
 
 ```bash
 # Terminal 1: start the exchange
@@ -88,9 +88,58 @@ go run ./cmd/ax call --to http://localhost:8080/platform/v1/route/<agent-id> \
 open http://localhost:8080
 ```
 
+### Run with Docker Compose
+
+Spin up the platform plus the writer and analyst demo agents in one command:
+
+```bash
+make dev    # builds images and starts all services in the background
+make down   # stop and remove all containers when you're done
+```
+
+Services exposed:
+
+| Service  | Port  |
+|----------|-------|
+| Platform | 8080  |
+| Writer   | 8082  |
+| Analyst  | 8083  |
+
+**Once the stack is up:**
+
+```bash
+# Open the live dashboard (agents, credit spend, call history)
+open http://localhost:8080
+
+# Discover registered agents
+go run ./cmd/ax discover --api-key ax_companya_demo
+
+# Filter by skill tag (exact match against skill ID or tag)
+go run ./cmd/ax discover --api-key ax_companya_demo --skill writing
+
+# Call an agent (replace <agent-id> with an ID from discover)
+go run ./cmd/ax call \
+  --to http://localhost:8080/platform/v1/route/<agent-id> \
+  --api-key ax_companya_demo \
+  --text "Write a short post about Go generics"
+
+# Streaming call
+go run ./cmd/ax call \
+  --to http://localhost:8080/platform/v1/route/<agent-id> \
+  --api-key ax_companya_demo \
+  --text "Summarise this for me" --stream
+
+# Run the orchestrator demo (discovers agents and routes calls between them)
+make researcher
+
+# Tail logs
+docker compose logs -f            # all services
+docker compose logs -f platform   # platform only
+```
+
 ### Claude Code integration (MCP)
 
-AX ships with an MCP server. Add to your project's `.mcp.json`:
+AX ships with an MCP server. Add to your project's `.mcp.json` (the MCP client uses the workspace root as the working directory):
 
 ```json
 {
@@ -98,7 +147,6 @@ AX ships with an MCP server. Add to your project's `.mcp.json`:
     "agent-exchange": {
       "command": "go",
       "args": ["run", "./cmd/mcp"],
-      "cwd": "<path-to-agent-exchange>",
       "env": { "AX_PLATFORM_URL": "http://localhost:8080" }
     }
   }

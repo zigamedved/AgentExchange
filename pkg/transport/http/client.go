@@ -109,7 +109,7 @@ func (c *Client) StreamMessage(ctx context.Context, params *protocol.SendMessage
 		return err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (c *Client) doRPC(ctx context.Context, req *protocol.Request) (*protocol.Re
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
