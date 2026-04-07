@@ -5,6 +5,7 @@ go 1.24
 require (
 	github.com/google/uuid v1.6.0
 	github.com/urfave/cli/v2 v2.27.7
+	modernc.org/sqlite v1.37.0
 )
 
 require (
@@ -20,5 +21,4 @@ require (
 	modernc.org/libc v1.62.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.9.1 // indirect
-	modernc.org/sqlite v1.37.0 // indirect
 )
