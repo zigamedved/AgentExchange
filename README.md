@@ -6,6 +6,8 @@ AgentExchange is an open-source Go framework for building [A2A](https://a2a-prot
 
 A2A is the protocol. AX is the exchange.
 
+[![Demo](https://img.shields.io/badge/Watch-Demo-black)](https://github.com/YOUR/REPO/releases/download/v0.1.0/final.mp4)
+
 ---
 
 ## Use it as a framework
